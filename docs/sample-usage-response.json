@@ -1,15 +1,15 @@
 {
   "five_hour": {
-    "utilization": 29.0,
-    "resets_at": "2026-09-19T20:30:00.476650+00:00",
+    "utilization": 25.0,
+    "resets_at": "2026-01-01T20:30:00.000000+00:00",
     "limit_dollars": null,
     "used_dollars": null,
     "remaining_dollars": null,
     "locked_reason": null
   },
   "seven_day": {
-    "utilization": 28.0,
-    "resets_at": "2026-09-24T07:00:00.476679+00:00",
+    "utilization": 20.0,
+    "resets_at": "2026-01-06T07:00:00.000000+00:00",
     "limit_dollars": null,
     "used_dollars": null,
     "remaining_dollars": null,
@@ -41,9 +41,9 @@
   "amber_gauge": null,
   "extra_usage": {
     "is_enabled": true,
-    "monthly_limit": 7500,
-    "used_credits": 4843.0,
-    "utilization": 64.57333333333334,
+    "monthly_limit": 5000,
+    "used_credits": 0.0,
+    "utilization": 0.0,
     "currency": "USD",
     "decimal_places": 2,
     "disabled_reason": null,
@@ -57,41 +57,41 @@
     {
       "kind": "session",
       "group": "session",
-      "percent": 29,
+      "percent": 25,
       "severity": "normal",
-      "resets_at": "2026-09-19T20:30:00.476650+00:00",
+      "resets_at": "2026-01-01T20:30:00.000000+00:00",
       "scope": null,
       "is_active": true
     },
     {
       "kind": "weekly_all",
       "group": "weekly",
-      "percent": 28,
+      "percent": 20,
       "severity": "normal",
-      "resets_at": "2026-09-24T07:00:00.476679+00:00",
+      "resets_at": "2026-01-06T07:00:00.000000+00:00",
       "scope": null,
       "is_active": false
     }
   ],
   "spend": {
     "used": {
-      "amount_minor": 4843,
+      "amount_minor": 0,
       "currency": "USD",
       "exponent": 2
     },
     "limit": {
-      "amount_minor": 7500,
+      "amount_minor": 5000,
       "currency": "USD",
       "exponent": 2
     },
-    "percent": 65,
+    "percent": 0,
     "severity": "normal",
     "enabled": true,
     "disabled_reason": null,
     "cap": {
       "money": null,
       "credits": {
-        "amount_minor": 7500,
+        "amount_minor": 5000,
         "exponent": 2
       }
     },
@@ -103,18 +103,18 @@
   },
   "member_dashboard_available": false,
   "seven_day_breakdown": {
-    "as_of": "2026-09-19T16:53:42.889105+00:00",
-    "window_started_at": "2026-09-17T07:00:00.476679+00:00",
+    "as_of": "2026-01-01T16:53:42.000000+00:00",
+    "window_started_at": "2026-01-01T07:00:00.000000+00:00",
     "rows": [
       {
         "key": "claude_code",
         "display_name": "Claude Code",
-        "percent": 92
+        "percent": 75
       },
       {
         "key": "chat",
         "display_name": "Chats",
-        "percent": 8
+        "percent": 25
       },
       {
         "key": "cowork",
