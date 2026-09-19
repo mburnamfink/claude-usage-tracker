@@ -1,0 +1,7 @@
+[Unit]
+Description=Claude Code usage snapshot poller
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/michael/dev/claude-usage-tracker/tracker
+ExecStart=/home/michael/work/bin/python /home/michael/dev/claude-usage-tracker/tracker/poll.py

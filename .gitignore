@@ -1,0 +1,12 @@
+# Runtime capture — personal usage/spend data, not for version control
+data/usage.db
+data/raw/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Never commit credentials or tokens
+*.credentials.json
+*token*
