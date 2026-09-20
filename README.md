@@ -41,6 +41,26 @@ Optional — to keep the timer running when you are not logged in
 sudo loginctl enable-linger $USER
 ```
 
+## Outage alerts (ntfy.sh)
+
+Because the endpoint is undocumented and could break, each poll runs a health
+check and pushes a phone notification if *real* failures (HTTP errors, network
+errors, or a silent schema change) persist past a threshold. Transient 429s and
+`token_expired` (Claude Code not running) never alert.
+
+Setup: copy `alert_config.example.json` to `alert_config.json` (gitignored),
+pick a random `ntfy_topic`, then subscribe to that topic in the
+[ntfy](https://ntfy.sh) app (or open `https://ntfy.sh/<topic>` in a browser).
+Thresholds: `warn_minutes` (first alert, default 30), `realert_minutes` (re-alert
+cadence, default 60), `stale_minutes` (stop alerting once idle, default 15).
+
+```json
+{ "ntfy_topic": "pick-a-random-topic", "warn_minutes": 30, "realert_minutes": 60, "stale_minutes": 15 }
+```
+
+The endpoint intermittently 429s (bursts against Claude Code's own calls to it);
+`poll.py` retries with backoff, and isolated 429s recover on the next 5-min poll.
+
 ## Inspect data
 
 ```sh

@@ -1,0 +1,6 @@
+{
+  "ntfy_topic": "CHANGE-ME-pick-a-random-topic",
+  "warn_minutes": 30,
+  "realert_minutes": 60,
+  "stale_minutes": 15
+}

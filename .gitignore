@@ -10,3 +10,7 @@ __pycache__/
 # Never commit credentials or tokens
 *.credentials.json
 *token*
+
+# Alert config holds the ntfy topic (a shared secret)
+alert_config.json
+data/alert_state.json
