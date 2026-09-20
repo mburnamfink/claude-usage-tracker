@@ -1,0 +1,10 @@
+[Unit]
+Description=Harvest transcript tokens hourly (before the 30-day retention prunes them)
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=90
+
+[Install]
+WantedBy=timers.target

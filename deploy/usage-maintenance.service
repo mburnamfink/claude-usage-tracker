@@ -1,0 +1,8 @@
+[Unit]
+Description=Compress and prune old raw usage logs
+OnFailure=usage-alert@%N.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/michael/dev/claude-usage-tracker/tracker
+ExecStart=/home/michael/work/bin/python /home/michael/dev/claude-usage-tracker/tracker/maintenance.py

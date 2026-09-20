@@ -121,3 +121,102 @@ def check_health(conn, now: datetime | None = None) -> dict:
         return {"action": "escalate", "outage_min": round(dur_min)}
 
     return {"action": "none", "reason": "already alerted"}
+
+
+# ---- pipeline health: the poller watches the two hourly/monthly timers ----
+# The poller runs every 5 min and already has ntfy plumbing, so it is the natural
+# watchdog for the harvest + price timers, which have no alerting of their own.
+# Breadcrumbs live in harvest_meta (written by tokens.harvest / refresh_prices).
+
+PIPELINE_STATE = ROOT / "data" / "pipeline_state.json"
+# thresholds in hours; realert once per HARVEST_STALE window to avoid spam
+HARVEST_STALE_H = 3          # hourly timer: 3 missed runs = something's wrong
+PRICE_STALE_H = 24 * 40      # monthly timer: ~40 days
+CANARY_MIN_BYTES = 50_000    # a substantial append that yields nothing = format drift
+
+
+def _load_pipeline() -> dict:
+    try:
+        return json.loads(PIPELINE_STATE.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _meta(conn) -> dict:
+    return {k: v for k, v in conn.execute("SELECT k, v FROM harvest_meta")}
+
+
+def check_pipeline(conn, now: datetime | None = None) -> dict:
+    """Detect the silent failures OnFailure can't: a timer that stopped firing, a
+    harvest that recognizes nothing (transcript format drift), or an unpriced model.
+    No-op (and never raises) if the Phase-2 tables aren't present yet."""
+    now = now or datetime.now(timezone.utc)
+    cfg = _config()
+    topic = cfg.get("ntfy_topic")
+    try:
+        meta = _meta(conn)
+    except Exception:
+        return {"action": "none", "reason": "no harvest_meta yet"}
+
+    issues = []  # (key, title, message)
+
+    lr = meta.get("last_run")
+    if lr:
+        age_h = (now - _parse(lr)).total_seconds() / 3600
+        if age_h > HARVEST_STALE_H:
+            issues.append(("harvest_stale", "Token harvest stalled",
+                           f"No harvest run in {age_h:.0f}h (timer dead?)."))
+        elif (int(meta.get("last_appended_bytes", "0")) > CANARY_MIN_BYTES
+              and int(meta.get("last_turns_written", "0")) == 0
+              and int(meta.get("last_titles", "0")) == 0):
+            issues.append(("harvest_canary", "Harvest recognizes nothing",
+                           "Read new transcript bytes but parsed 0 turns — format drift?"))
+
+    pr = meta.get("last_price_refresh")
+    if pr and (now - _parse(pr)).total_seconds() / 3600 > PRICE_STALE_H:
+        issues.append(("price_stale", "Price refresh stalled",
+                       "No price reconcile in >40 days (timer dead?)."))
+
+    try:
+        priced = {r[0] for r in conn.execute("SELECT DISTINCT model FROM prices")}
+        used = {r[0] for r in conn.execute("SELECT DISTINCT model FROM turns")}
+        gaps = sorted(used - priced - {"<synthetic>"})
+    except Exception:
+        gaps = []
+    if gaps:
+        issues.append(("price_coverage", "Unpriced model(s)",
+                       f"Cost undercounts: {', '.join(gaps)}"))
+
+    state = _load_pipeline()
+    fired = []
+    for key, title, message in issues:
+        last = state.get(key)
+        due = last is None or (now - _parse(last)).total_seconds() / 60 >= cfg["realert_minutes"]
+        if due and topic:
+            _send_ntfy(topic, f"Usage tracker: {title}", message, "high", "warning")
+            state[key] = now.isoformat()
+            fired.append(key)
+    # clear resolved issues so they can alert again if they recur
+    for key in list(state):
+        if key not in {k for k, _, _ in issues}:
+            state.pop(key)
+    PIPELINE_STATE.parent.mkdir(parents=True, exist_ok=True)
+    PIPELINE_STATE.write_text(json.dumps(state))
+    return {"action": "alert" if fired else "none",
+            "issues": [k for k, _, _ in issues], "fired": fired}
+
+
+def notify_failure(unit: str) -> None:
+    """OnFailure= handler: a service (poller/harvest/prices) exited non-zero."""
+    cfg = _config()
+    topic = cfg.get("ntfy_topic")
+    if topic:
+        _send_ntfy(topic, "Usage tracker: service failed",
+                   f"{unit} exited with failure — check `journalctl --user -u {unit}`.",
+                   "high", "rotating_light")
+
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) >= 3 and sys.argv[1] == "--failed":
+        notify_failure(sys.argv[2])

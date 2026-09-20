@@ -1,0 +1,7 @@
+[Unit]
+Description=Notify (ntfy) that %i failed
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/michael/dev/claude-usage-tracker/tracker
+ExecStart=/home/michael/work/bin/python /home/michael/dev/claude-usage-tracker/tracker/alert.py --failed %i

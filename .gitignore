@@ -1,5 +1,5 @@
 # Runtime capture — personal usage/spend data, not for version control
-data/usage.db
+data/usage.db*
 data/raw/
 
 # Python
@@ -10,7 +10,10 @@ __pycache__/
 # Never commit credentials or tokens
 *.credentials.json
 *token*
+# tokens.py is source (the harvester), not a secret; the *token* rule is for creds
+!tracker/tokens.py
 
 # Alert config holds the ntfy topic (a shared secret)
 alert_config.json
-data/alert_state.json
+# runtime state (alert_state.json, pipeline_state.json)
+data/*_state.json

@@ -41,6 +41,74 @@ Optional — to keep the timer running when you are not logged in
 sudo loginctl enable-linger $USER
 ```
 
+## Phase 2 — token & cost harvest
+
+`tracker/tokens.py` walks the Claude Code transcripts
+(`~/.claude/projects/**/*.jsonl`), dedups assistant turns, and stores per-turn
+token usage in `usage.db` (`turns`) so the token history **outlives the ~30-day
+transcript retention**. It also captures each session's `ai-title` label
+(`session_titles`) and rolls tokens into observed session windows
+(`window_tokens`). Cost is **derived at query time** from a versioned price book
+(`prices`); categories come from an editable, ordered ruleset (`category_rules`,
+first match wins — extend by inserting a row). The harvest is incremental:
+unchanged files cost one `stat()`, a growing file is read only from where it left
+off, and re-reading can never double-count (`message_id` UPSERT keep-max).
+
+`tracker/refresh_prices.py` reconciles `prices` against the LiteLLM price map and
+versions any changed rate (closes the open row, inserts a new one); a failed fetch
+never changes anything.
+
+```sh
+cd tracker && ~/work/bin/python tokens.py            # harvest now
+cd tracker && ~/work/bin/python refresh_prices.py --dry-run   # preview price changes
+```
+
+Install the timers (harvest hourly, prices monthly, log compaction weekly) plus
+the shared failure notifier:
+
+```sh
+cp deploy/usage-harvest.* deploy/usage-prices.* deploy/usage-maintenance.* \
+   deploy/usage-alert@.service  ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now usage-harvest.timer usage-prices.timer usage-maintenance.timer
+```
+
+The harvest opens the DB in WAL mode so it can run while the 5-minute poller
+writes; both are short, idempotent transactions.
+
+## What can silently break — and what catches it
+
+Three layers, all pushing to the same ntfy topic:
+
+- **Endpoint outage** — the poller's own health check (sustained HTTP/schema/network
+  failures). Original behavior.
+- **A service crashes** (broken `~/work` venv, disk full, DB locked, an exception in
+  any unit) — every unit has `OnFailure=usage-alert@…`, which fires a notification.
+- **A timer silently stops or drifts** — the 5-minute poller is the watchdog for the
+  hourly/monthly timers (`alert.check_pipeline`): it alerts if the harvest heartbeat
+  goes stale (timer dead), if a harvest read new transcript bytes but parsed **zero**
+  turns (Claude Code changed the transcript format), or if a model in `turns` has no
+  price row (cost undercounting).
+
+Residual gap: if the **poller itself** stops firing while you're logged in, nothing
+external notices (its watchdog can't run). `enable-linger` keeps the timers running
+when logged out; for a true dead-man's switch, add an external ping (e.g.
+healthchecks.io) to the poller.
+
+## Storage
+
+The tool adds ~0.2 GB/year (journal + raw logs + DB); the DB and gzipped raw logs are
+the durable parts. `usage-maintenance` gzips raw poll logs older than 7 days (~10×) and
+drops them after 90 days — the parsed data is in `usage.db` regardless.
+
+The **systemd journal is capped globally, not per-user** — set it once (needs sudo):
+
+```sh
+sudo mkdir -p /etc/systemd/journald.conf.d
+printf '[Journal]\nSystemMaxUse=500M\n' | sudo tee /etc/systemd/journald.conf.d/cap.conf
+sudo systemctl restart systemd-journald          # or: journalctl --vacuum-size=500M
+```
+
 ## Outage alerts (ntfy.sh)
 
 Because the endpoint is undocumented and could break, each poll runs a health

@@ -148,6 +148,10 @@ def main() -> int:
             action = alert.check_health(conn)
         except Exception as e:  # an alert failure must never break capture
             action = {"action": "error", "error": str(e)}
+        try:
+            pipeline = alert.check_pipeline(conn)  # watchdog for the harvest/price timers
+        except Exception as e:
+            pipeline = {"action": "error", "error": str(e)}
 
     if row["status"] == "ok":
         print(f"{row['captured_at']} ok — session {row['session_pct']}% "
@@ -156,6 +160,8 @@ def main() -> int:
         print(f"{row['captured_at']} {row['status']} — HTTP {row['http_code']}")
     if action.get("action") not in (None, "none"):
         print(f"  alert: {action}")
+    if pipeline.get("action") not in (None, "none"):
+        print(f"  pipeline: {pipeline}")
     return 0
 
 

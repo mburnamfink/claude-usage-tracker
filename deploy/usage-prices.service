@@ -1,0 +1,10 @@
+[Unit]
+Description=Reconcile the Claude price book against the LiteLLM map
+OnFailure=usage-alert@%N.service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/michael/dev/claude-usage-tracker/tracker
+ExecStart=/home/michael/work/bin/python /home/michael/dev/claude-usage-tracker/tracker/refresh_prices.py

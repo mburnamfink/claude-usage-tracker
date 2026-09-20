@@ -1,0 +1,8 @@
+[Unit]
+Description=Harvest Claude Code transcript tokens into usage.db
+OnFailure=usage-alert@%N.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/michael/dev/claude-usage-tracker/tracker
+ExecStart=/home/michael/work/bin/python /home/michael/dev/claude-usage-tracker/tracker/tokens.py

@@ -1,5 +1,6 @@
 [Unit]
 Description=Claude Code usage snapshot poller
+OnFailure=usage-alert@%N.service
 
 [Service]
 Type=oneshot
