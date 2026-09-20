@@ -60,9 +60,9 @@ def parse(payload: dict) -> dict:
         return node.get("resets_at") if isinstance(node, dict) else None
 
     extra = payload.get("extra_usage") or {}
+    breakdown = payload.get("seven_day_breakdown")
     cc_share = None
-    breakdown = payload.get("seven_day_breakdown") or {}
-    for r in breakdown.get("rows", []):
+    for r in (breakdown or {}).get("rows", []):
         if r.get("key") == "claude_code":
             cc_share = r.get("percent")
 
@@ -75,6 +75,7 @@ def parse(payload: dict) -> dict:
         "extra_usage_pct": extra.get("utilization"),
         "extra_used_credits": extra.get("used_credits"),
         "cc_weekly_share": cc_share,
+        "weekly_breakdown_json": json.dumps(breakdown) if breakdown else None,
     }
 
 
