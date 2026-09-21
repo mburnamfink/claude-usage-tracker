@@ -1,0 +1,13 @@
+[Unit]
+Description=Claude usage live dashboard (localhost)
+OnFailure=usage-alert@%N.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/michael/dev/claude-usage-tracker/tracker
+ExecStart=/home/michael/work/bin/python /home/michael/dev/claude-usage-tracker/tracker/serve.py --port 8787
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

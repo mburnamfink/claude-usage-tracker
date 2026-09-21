@@ -1,6 +1,8 @@
 # Runtime capture — personal usage/spend data, not for version control
 data/usage.db*
 data/raw/
+# report.py output inlines the private usage snapshot; regenerate, don't commit
+display/quota-telemetry.generated.html
 
 # Python
 __pycache__/

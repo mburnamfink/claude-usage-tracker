@@ -17,11 +17,13 @@
     --border-2:     rgba(20,19,15,0.06);
     --accent:       #2a78d6;
     --critical:     #d03b3b;
-    --credit:       #b9791a;   /* amber overage — status:warning, always with $ label + hatch */
+    --credit:       #b9791a;   /* amber overage — status:warning, always with a credit label + hatch */
     --cat-coding:   #2a78d6;
     --cat-rpg:      #eb6834;
     --cat-news:     #1baf7a;
     --cat-chat:     #eda100;
+    --cat-media:    #8b5cf6;
+    --cat-misc:     #9a988f;
     --shadow:       0 1px 2px rgba(20,19,15,.06), 0 8px 24px rgba(20,19,15,.05);
   }
   @media (prefers-color-scheme: dark) {
@@ -32,6 +34,7 @@
       --grid:#2c2c2a; --baseline:#3a3a37; --border:rgba(255,255,255,0.11); --border-2:rgba(255,255,255,0.06);
       --accent:#3987e5; --critical:#e66767; --credit:#e0a63a;
       --cat-coding:#3987e5; --cat-rpg:#d95926; --cat-news:#199e70; --cat-chat:#c98500;
+      --cat-media:#a78bfa; --cat-misc:#807e76;
       --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.4);
     }
   }
@@ -42,6 +45,7 @@
     --grid:#2c2c2a; --baseline:#3a3a37; --border:rgba(255,255,255,0.11); --border-2:rgba(255,255,255,0.06);
     --accent:#3987e5; --critical:#e66767; --credit:#e0a63a;
     --cat-coding:#3987e5; --cat-rpg:#d95926; --cat-news:#199e70; --cat-chat:#c98500;
+    --cat-media:#a78bfa; --cat-misc:#807e76;
     --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.4);
   }
 
@@ -73,6 +77,18 @@
   .kpi .rail.crit { background:var(--critical); }
   .kpi .rail.credit { background:var(--credit); }
 
+  .livebar { display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center; margin:20px 0 0;
+    font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--ink-2);
+    background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:9px 14px; box-shadow:var(--shadow); }
+  .livebar b { color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
+  .lb-item { display:inline-flex; align-items:center; gap:7px; }
+  .lb-item + .lb-item { border-left:1px solid var(--border); padding-left:18px; }
+  .live-dot { width:8px; height:8px; border-radius:50%; display:inline-block; flex:none; }
+  .live-dot.ok  { background:var(--cat-news); animation:pulse 2s ease-in-out infinite; }
+  .live-dot.bad { background:var(--credit); }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.35;} }
+  @media (prefers-reduced-motion: reduce){ .live-dot.ok { animation:none; } }
+
   section.instrument { margin-top:44px; }
   .inst-head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:4px; }
   .inst-num { font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--accent); font-weight:600; letter-spacing:.05em; }
@@ -98,9 +114,18 @@
   .ridge-label { font-family:"IBM Plex Mono",monospace; font-size:11px; fill:var(--ink-2); }
   .ridge-dot { cursor:pointer; }
 
+  #stacks, #ridge { cursor:crosshair; touch-action:none; }
+  .zoom-sel { fill:var(--accent); fill-opacity:.10; stroke:var(--accent); stroke-width:1; stroke-dasharray:3 3; pointer-events:none; }
+  .zoomctl { display:flex; align-items:center; gap:10px; }
+  .zoomhint { font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--muted); }
+  .zoombtn { font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--ink-2); background:var(--surface-2);
+    border:1px solid var(--border); border-radius:999px; padding:4px 10px; cursor:pointer; transition:color .15s,border-color .15s; }
+  .zoombtn:hover { color:var(--ink); border-color:var(--baseline); }
+  .zoombtn:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
   .tip { position:fixed; z-index:50; pointer-events:none; opacity:0; transform:translateY(3px); transition:opacity .1s;
     background:var(--surface); color:var(--ink); border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow);
-    padding:10px 12px; font-size:12.5px; max-width:250px; }
+    padding:10px 12px; font-size:12.5px; max-width:260px; }
   .tip.on { opacity:1; transform:none; }
   .tip .t-title { font-weight:600; margin-bottom:6px; display:flex; align-items:center; gap:7px; font-size:13px; }
   .tip .t-title .dot { width:9px; height:9px; border-radius:3px; flex:none; }
@@ -117,27 +142,30 @@
 <div class="wrap">
   <header class="top">
     <div>
-      <p class="eyebrow">Claude Code · Rate-limit tracker · Phase 2 prototype</p>
+      <p class="eyebrow" id="eyebrow">Claude Code · Rate-limit tracker</p>
       <h1>Quota Telemetry</h1>
-      <p class="sub">Two readings of one question: <b>how much of the weekly window does each 5-hour session burn — and when am I forced to stop?</b> Simulated data; real capture is one day deep.</p>
+      <p class="sub" id="sub">Two readings of one question: <b>how much of the weekly window does each 5-hour session burn — and when am I forced to stop?</b></p>
     </div>
     <button class="theme-toggle" id="themeBtn" aria-label="Toggle color theme">◐ <span id="themeLbl">Theme</span></button>
   </header>
+
+  <div class="livebar" id="livebar" role="status" aria-live="polite" hidden></div>
 
   <div class="kpis" id="kpis"></div>
 
   <!-- Instrument 1: Session vs Week -->
   <section class="instrument">
     <div class="inst-head"><span class="inst-num">01</span><h2>Session vs Week</h2></div>
-    <p class="inst-desc">Every session is a rectangle: <b>width = how much of its 5-hour window it used</b>, <b>height = how much of the weekly window it ate</b>. Stack a week and the tower's height <b>is</b> that week's weekly burn. A tall-narrow block is a quiet session that still cost the week dearly; a wide-flat block is an intense sprint that barely dented the budget. Rectangles touching the <b>right wall hit the 5-hour ceiling</b> (you had to wait it out); the <b>red band</b> is the weekly ceiling; <b>amber hatch</b> is spend that ran on credits past 100%.</p>
+    <p class="inst-desc" id="desc1">Every 5-hour window is a rectangle: <b>width = how much of its 5-hour ceiling it used</b>, <b>height = how much of the weekly window it added</b>. Stack a week and the tower's height <b>is</b> that week's weekly burn. A tall-narrow block is a quiet window that still cost the week dearly; a wide-flat block is an intense sprint that barely dented the budget. Rectangles touching the <b>right wall hit the 5-hour ceiling</b> (you had to wait it out); the <b>red band</b> is the weekly ceiling; <b>amber hatch</b> is spend that ran on credits.</p>
     <div class="panel">
       <div class="panel-toolbar">
         <div class="legend" id="catLegend"></div>
+        <div class="zoomctl"><span class="zoomhint">drag-zoom · scroll · dbl-click reset</span><button class="zoombtn" id="resetStacks" hidden>reset ⤢</button></div>
       </div>
       <div class="panel-toolbar" style="margin-top:-4px">
         <div class="legend">
           <span class="item"><span class="swatch" style="background:var(--critical)"></span>hit 5-hour wall (had to stop)</span>
-          <span class="item"><span class="swatch" id="creditSwatch"></span>credits, past 100%</span>
+          <span class="item"><span class="swatch" id="creditSwatch"></span><span id="creditLegendTxt">credits spent</span></span>
           <span class="item hint">← wider = more of the 5h window · taller = more of the week ↑</span>
         </div>
       </div>
@@ -148,7 +176,7 @@
   <!-- Instrument 2: Week Burn-up -->
   <section class="instrument">
     <div class="inst-head"><span class="inst-num">02</span><h2>Week Burn-up</h2></div>
-    <p class="inst-desc">One panel per week, all on the same 0→100% scale so the shapes compare directly — usage <b>only ever climbs</b> and can't pass 100% (spillover becomes credits). The faint diagonal is an <b>even-pace</b> line: a curve above it is burning faster than the week can afford; below it you're holding back. This is the "50% and it's Tuesday — go" versus "72% and it's Thursday — hold" read, and reading left→right shows whether your pacing is drifting. Dots are sessions; the <b>red zone</b> is past 90%; <b>amber</b> breaks above the ceiling as credit spend.</p>
+    <p class="inst-desc" id="desc2">One panel per week, all on the same 0→100% scale so the shapes compare directly — usage <b>only ever climbs</b> and can't pass 100% (spillover becomes credits). The faint diagonal is an <b>even-pace</b> line: a curve above it is burning faster than the week can afford; below it you're holding back. This is the "50% and it's Tuesday — go" versus "72% and it's Thursday — hold" read, and reading left→right shows whether your pacing is drifting. Dots are 5-hour windows; the <b>red zone</b> is past 90%.</p>
     <div class="panel">
       <div class="panel-toolbar">
         <div class="legend">
@@ -157,6 +185,7 @@
           <span class="item"><span class="swatch" style="background:var(--critical);border-radius:50%"></span>≥90% zone</span>
           <span class="item hint">diagonal = even pace</span>
         </div>
+        <div class="zoomctl"><span class="zoomhint">drag-zoom · scroll · dbl-click reset</span><button class="zoombtn" id="resetRidge" hidden>reset ⤢</button></div>
       </div>
       <svg id="ridge" viewBox="0 0 1000 260" role="img" aria-label="Small-multiple weekly burn-up panels on a fixed 0 to 100 percent scale"></svg>
     </div>
@@ -169,90 +198,125 @@
 
 <script>
 "use strict";
-/* ---- seeded data model — mirrors usage.db snapshots ----
-   session: weekIdx, dayIdx, start, durH, sessionPct, weeklyPct, cat, tokens, label,
-            wall(bool 5h ceiling), nearWall(bool), onCredits(bool), creditUsd
-   weeks group by the 7-day quota window (reset Thu 07:00 UTC, from real data)   */
-function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
-const rng = mulberry32(20260919);
-const R=(lo,hi)=>lo+rng()*(hi-lo);
+/* Data model (mirrors usage.db). A session = one observed 5-hour quota window:
+     sessionPct  peak % of the 5-hour ceiling reached in the window
+     weeklyPct   the window's contribution to the weekly window (Δ, monotonic)
+     cat         dominant Tier-B category (token share, Claude Code only)
+     wall        hit the 5-hour ceiling (100%); nearWall  >=90% and <100
+     onCredits / creditUsd   pay-as-you-go spend past the 5-hour wall
+   A week groups windows by the 7-day quota window (resets Thu 07:00 UTC).
+   Real data is injected as window.__QUOTA_DATA__; ?demo=1 forces the seeded sim. */
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+const _params=new URLSearchParams(location.search);
+const FORCE_DEMO=_params.get("demo")==="1";
+const REFRESH_MS=30000;                 // poll the local server this often (data path only)
+let DATA=window.__QUOTA_DATA__||null;   // inlined by report.py, or fetched from /api/data
+let REAL=false;                         // showing real data (vs seeded demo)
+let LIVE=false;                         // fetch+poll mode (local server)
+let CONN={ok:false, err:null};          // last fetch outcome, for the live strip
+let CATS=[], weeks=[], NWEEKS=0, CREDIT_UNIT="cr", allSessions=[];
+let zStacks=null;   // instrument 1 y-domain zoom {a,b} in wk% (null = auto 0..118)
+let zRidge=null;    // instrument 2 zoom {d0,d1,p0,p1} in days × wk% (null = auto)
+let DRAGGING=false; // suppress hover tooltips mid zoom-drag
 
-const CATS=[
-  {key:"coding",name:"Coding", varname:"--cat-coding",w:0.48},
-  {key:"rpg",   name:"RPG-dev",varname:"--cat-rpg",   w:0.24},
-  {key:"news",  name:"newsfeed",varname:"--cat-news", w:0.16},
-  {key:"chat",  name:"Chats",  varname:"--cat-chat",  w:0.12},
-];
-const LABELS={
-  coding:["usage-tracker phase 2","refactor auth flow","fix flaky tests","dashboard layout","sqlite schema migration","llm-switch CLI","waterweb scraper"],
-  rpg:["quarry-that-woke-up scene","NPC casting notes","critique pass","encounter balance","publish to wiki","setting-guide edits"],
-  news:["newsfeed summary run","dedup source feeds","summary prompt tune","backfill archive"],
-  chat:["planning chat","debugging thread","brainstorm names","quick question"],
-};
-function pickCat(){let r=rng(),a=0;for(const c of CATS){a+=c.w;if(r<=a)return c;}return CATS[0];}
-
-const NWEEKS=6, WEEK_MS=7*24*3600*1000;
-const LATEST_END=new Date("2026-09-24T07:00:00Z");     // real captured weekly reset
-const ARCH=[0.34,0.58,0.93,0.47,1.0,0.72];             // oldest→newest weekly-peak targets
-const CREDIT_WEEK=4;                                    // the week that blew past 100%
-
-const weeks=[];
-for(let w=0; w<NWEEKS; w++){
-  const end=new Date(LATEST_END.getTime()-(NWEEKS-1-w)*WEEK_MS);
-  const start=new Date(end.getTime()-WEEK_MS);
-  const target=ARCH[w]*100;
-  const nSessions=clamp(Math.round(target/8+R(-1,2)),3,14);
-  const nActive=clamp(Math.round(nSessions/2+R(0,1)),3,7);
-  const pool=[0,1,2,3,4,5,6];
-  for(let i=pool.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
-  const activeDays=pool.slice(0,nActive).sort((a,b)=>a-b);
-  const raw=[];
-  for(let s=0;s<nSessions;s++){
-    const r=rng(); let sessionPct, rawW, wall=false;
-    if(r<0.24){ // short intense burst — slams the 5h window, small slice of the week
-      if(rng()<0.34){ sessionPct=100; wall=true; } else sessionPct=R(88,99.4);
-      rawW=R(1,4);
-    } else if(r<0.44){ sessionPct=R(28,54); rawW=R(9,17); }        // long grind
-    else { rawW=R(3,10); sessionPct=clamp(rawW*3.6+R(0,30),16,97); } // correlated middle
-    raw.push({sessionPct,rawW,wall});
-  }
-  const rawSum=raw.reduce((a,x)=>a+x.rawW,0)||1;
-  const scale=target/rawSum;
-  const sessions=[];
-  raw.forEach(rw=>{
-    const weeklyPct=Math.min(22, rw.rawW*scale);
-    const d=activeDays[Math.floor(rng()*activeDays.length)];
-    const durH=clamp(0.4+weeklyPct*0.22+R(0,1.6),0.4,5);
-    const cat=pickCat();
-    const startHour=R(8,20);
-    const start_=new Date(start.getTime()+d*24*3600*1000+startHour*3600*1000);
-    const tokens=Math.round(weeklyPct*(1.4e6+rng()*1.1e6));
-    const lab=LABELS[cat.key][Math.floor(rng()*LABELS[cat.key].length)];
-    sessions.push({weekIdx:w,dayIdx:d,start:start_,durH,sessionPct:rw.sessionPct,weeklyPct,cat,tokens,label:lab,
-      wall:rw.wall, nearWall:(rw.sessionPct>=90 && !rw.wall), onCredits:false, creditUsd:0});
-  });
-  sessions.sort((a,b)=>a.start-b.start);
-  let weeklyPeak=Math.min(100, sessions.reduce((s,x)=>s+x.weeklyPct,0));
-  let creditUsd=0;
-  if(w===CREDIT_WEEK){                       // force to the ceiling, then a little credit spend
-    weeklyPeak=100;
-    const nCred=2;
-    for(let c=0;c<nCred;c++){
-      const cat=pickCat(); const cu=R(1.5,6);
-      const d=activeDays[activeDays.length-1];
-      const start_=new Date(start.getTime()+d*24*3600*1000+R(15,22)*3600*1000+c*1800*1000);
-      const sp=R(40,86);
-      sessions.push({weekIdx:w,dayIdx:d,start:start_,durH:clamp(R(1,3.5),0.4,5),
-        sessionPct:sp, weeklyPct:0, cat, tokens:Math.round(cu*1.2e6),
-        label:"over the weekly wall", wall:sp>=99, nearWall:(sp>=90&&sp<99), onCredits:true, creditUsd:cu});
-      creditUsd+=cu;
+/* ---- seeded demo: only reachable at ?demo=1 or when no real data is inlined ---- */
+function buildDemo(){
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+  const rng=mulberry32(20260919);
+  const R=(lo,hi)=>lo+rng()*(hi-lo);
+  const CATS=[
+    {key:"coding",name:"Coding", varname:"--cat-coding",w:0.48},
+    {key:"rpg",   name:"RPG-dev",varname:"--cat-rpg",   w:0.24},
+    {key:"news",  name:"newsfeed",varname:"--cat-news", w:0.16},
+    {key:"chat",  name:"Chats",  varname:"--cat-chat",  w:0.12},
+  ];
+  const LABELS={
+    coding:["usage-tracker phase 2","refactor auth flow","fix flaky tests","dashboard layout","sqlite schema migration","llm-switch CLI","waterweb scraper"],
+    rpg:["quarry-that-woke-up scene","NPC casting notes","critique pass","encounter balance","publish to wiki","setting-guide edits"],
+    news:["newsfeed summary run","dedup source feeds","summary prompt tune","backfill archive"],
+    chat:["planning chat","debugging thread","brainstorm names","quick question"],
+  };
+  function pickCat(){let r=rng(),a=0;for(const c of CATS){a+=c.w;if(r<=a)return c;}return CATS[0];}
+  const NWEEKS=6, WEEK_MS=7*24*3600*1000;
+  const LATEST_END=new Date("2026-09-24T07:00:00Z");
+  const ARCH=[0.34,0.58,0.93,0.47,1.0,0.72];
+  const CREDIT_WEEK=4;
+  const weeks=[];
+  for(let w=0; w<NWEEKS; w++){
+    const end=new Date(LATEST_END.getTime()-(NWEEKS-1-w)*WEEK_MS);
+    const start=new Date(end.getTime()-WEEK_MS);
+    const target=ARCH[w]*100;
+    const nSessions=clamp(Math.round(target/8+R(-1,2)),3,14);
+    const nActive=clamp(Math.round(nSessions/2+R(0,1)),3,7);
+    const pool=[0,1,2,3,4,5,6];
+    for(let i=pool.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
+    const activeDays=pool.slice(0,nActive).sort((a,b)=>a-b);
+    const raw=[];
+    for(let s=0;s<nSessions;s++){
+      const r=rng(); let sessionPct, rawW, wall=false;
+      if(r<0.24){ if(rng()<0.34){ sessionPct=100; wall=true; } else sessionPct=R(88,99.4); rawW=R(1,4); }
+      else if(r<0.44){ sessionPct=R(28,54); rawW=R(9,17); }
+      else { rawW=R(3,10); sessionPct=clamp(rawW*3.6+R(0,30),16,97); }
+      raw.push({sessionPct,rawW,wall});
     }
+    const rawSum=raw.reduce((a,x)=>a+x.rawW,0)||1;
+    const scale=target/rawSum;
+    const sessions=[];
+    raw.forEach(rw=>{
+      const weeklyPct=Math.min(22, rw.rawW*scale);
+      const d=activeDays[Math.floor(rng()*activeDays.length)];
+      const durH=clamp(0.4+weeklyPct*0.22+R(0,1.6),0.4,5);
+      const cat=pickCat();
+      const startHour=R(8,20);
+      const start_=new Date(start.getTime()+d*24*3600*1000+startHour*3600*1000);
+      const tokens=Math.round(weeklyPct*(1.4e6+rng()*1.1e6));
+      const lab=LABELS[cat.key][Math.floor(rng()*LABELS[cat.key].length)];
+      sessions.push({weekIdx:w,dayIdx:d,start:start_,durH,sessionPct:rw.sessionPct,weeklyPct,cat,tokens,label:lab,
+        wall:rw.wall, nearWall:(rw.sessionPct>=90 && !rw.wall), onCredits:false, creditUsd:0});
+    });
     sessions.sort((a,b)=>a.start-b.start);
+    let weeklyPeak=Math.min(100, sessions.reduce((s,x)=>s+x.weeklyPct,0));
+    let creditUsd=0;
+    if(w===CREDIT_WEEK){
+      weeklyPeak=100;
+      for(let c=0;c<2;c++){
+        const cat=pickCat(); const cu=R(1.5,6);
+        const d=activeDays[activeDays.length-1];
+        const start_=new Date(start.getTime()+d*24*3600*1000+R(15,22)*3600*1000+c*1800*1000);
+        const sp=R(40,86);
+        sessions.push({weekIdx:w,dayIdx:d,start:start_,durH:clamp(R(1,3.5),0.4,5),
+          sessionPct:sp, weeklyPct:0, cat, tokens:Math.round(cu*1.2e6),
+          label:"over the weekly wall", wall:sp>=99, nearWall:(sp>=90&&sp<99), onCredits:true, creditUsd:cu});
+        creditUsd+=cu;
+      }
+      sessions.sort((a,b)=>a.start-b.start);
+    }
+    weeks.push({idx:w,start,end,sessions,weeklyPeak,creditUsd,unobserved:0});
   }
-  weeks.push({idx:w,start,end,sessions,weeklyPeak,creditUsd});
+  return {CATS,weeks,creditUnit:"$"};
 }
-const allSessions=weeks.flatMap(w=>w.sessions);
+
+/* ---- real data: wire session.cat to a CATS object so the renderers are unchanged ---- */
+function buildReal(D){
+  const CATS=D.cats.map(c=>({key:c.key,name:c.name,varname:c.varname}));
+  const byKey=Object.fromEntries(CATS.map(c=>[c.key,c]));
+  const fb=byKey.misc||CATS[CATS.length-1]||{key:"misc",name:"Misc",varname:"--cat-misc"};
+  const weeks=D.weeks.map(w=>({
+    ...w,
+    start:new Date(w.start), end:new Date(w.end),
+    sessions:w.sessions.map(s=>({...s,
+      cat: byKey[s.catKey]||fb,
+      start:new Date(s.start), end:new Date(s.end)})),
+  }));
+  return {CATS,weeks,creditUnit:D.credit_unit||"cr"};
+}
+
+function applyBuilt(built, real, data){
+  CATS=built.CATS; weeks=built.weeks; NWEEKS=weeks.length;
+  CREDIT_UNIT=built.creditUnit; allSessions=weeks.flatMap(w=>w.sessions);
+  REAL=real; DATA=data;
+  renderCopy(); renderAll(); updateStatus();
+}
 
 /* ---- theme + colors ---- */
 function isDark(){const t=document.documentElement.getAttribute("data-theme");
@@ -266,11 +330,12 @@ const fmtDate=d=>d.toLocaleDateString(undefined,{month:"short",day:"numeric"});
 const fmtDateTime=d=>d.toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
 const fmtTok=n=>n>=1e6?(n/1e6).toFixed(1)+"M":Math.round(n/1e3)+"k";
 const fmtUsd=n=>"$"+n.toFixed(2);
+const fmtCreditVal=n=>CREDIT_UNIT==="$"?fmtUsd(n):Math.round(n)+" cr";
 const SVGNS="http://www.w3.org/2000/svg";
 function el(tag,attrs){const e=document.createElementNS(SVGNS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);return e;}
 
 const tip=document.getElementById("tip");
-function showTip(html,ev){tip.innerHTML=html;tip.classList.add("on");tip.setAttribute("aria-hidden","false");moveTip(ev);}
+function showTip(html,ev){if(DRAGGING)return;tip.innerHTML=html;tip.classList.add("on");tip.setAttribute("aria-hidden","false");moveTip(ev);}
 function moveTip(ev){const pad=14,w=tip.offsetWidth,h=tip.offsetHeight;let x=ev.clientX+pad,y=ev.clientY+pad;
   if(x+w>innerWidth-8)x=ev.clientX-w-pad; if(y+h>innerHeight-8)y=ev.clientY-h-pad; tip.style.left=x+"px";tip.style.top=y+"px";}
 function hideTip(){tip.classList.remove("on");tip.setAttribute("aria-hidden","true");}
@@ -278,17 +343,19 @@ function sessTip(s){
   let flag="";
   if(s.wall) flag=`<div class="t-flag wall">▮ hit the 5-hour wall — had to stop</div>`;
   else if(s.nearWall) flag=`<div class="t-flag wall">▮ ${s.sessionPct.toFixed(0)}% of the 5h window — near the wall</div>`;
-  if(s.onCredits) flag+=`<div class="t-flag credit">▨ ran on credits · ${fmtUsd(s.creditUsd)}</div>`;
-  const weeklyRow = s.onCredits
-    ? `<div class="t-row"><span class="k">weekly window</span><span class="v">100% (full)</span></div>`
-    : `<div class="t-row"><span class="k">weekly window</span><span class="v">${s.weeklyPct.toFixed(1)}%</span></div>`;
+  if(s.onCredits) flag+=`<div class="t-flag credit">▨ ran on credits · ${fmtCreditVal(s.creditUsd)}</div>`;
+  const weeklyRow=`<div class="t-row"><span class="k">weekly window</span><span class="v">+${s.weeklyPct.toFixed(1)}%${REAL&&s.weeklyAtEnd!=null?` → ${s.weeklyAtEnd.toFixed(0)}%`:""}</span></div>`;
+  const costRow=(s.cost!=null)?`<div class="t-row"><span class="k">cost · notional</span><span class="v">${fmtUsd(s.cost)}</span></div>`:"";
+  const ccNote=REAL?`<div class="t-meta">tokens & cost: Claude Code only</div>`:"";
   return `<div class="t-title"><span class="dot" style="background:${catColor(s.cat)}"></span>${s.label}</div>
     <div class="t-row"><span class="k">session window</span><span class="v">${s.sessionPct.toFixed(0)}%</span></div>
     ${weeklyRow}
     <div class="t-row"><span class="k">duration</span><span class="v">${s.durH.toFixed(1)} h</span></div>
     <div class="t-row"><span class="k">tokens</span><span class="v">${fmtTok(s.tokens)}</span></div>
+    ${costRow}
     ${flag}
-    <div class="t-meta">${s.cat.name} · ${fmtDateTime(s.start)}</div>`;
+    <div class="t-meta">${s.cat.name} · ${fmtDateTime(s.start)}</div>
+    ${ccNote}`;
 }
 function bind(node,s){
   node.addEventListener("mouseenter",e=>showTip(sessTip(s),e));
@@ -296,32 +363,46 @@ function bind(node,s){
   node.addEventListener("mouseleave",hideTip);
 }
 /* amber diagonal hatch pattern for credit fills */
-function addHatch(svg,id){
+function addHatch(svg,id,cvar){
+  const c=cvar||"--credit";
   const defs=el("defs",{});
   const p=el("pattern",{id,width:6,height:6,patternUnits:"userSpaceOnUse",patternTransform:"rotate(45)"});
-  p.appendChild(el("rect",{width:6,height:6,fill:cssv("--credit"),"fill-opacity":0.22}));
-  p.appendChild(el("rect",{width:2.4,height:6,fill:cssv("--credit"),"fill-opacity":0.95}));
+  p.appendChild(el("rect",{width:6,height:6,fill:cssv(c),"fill-opacity":0.22}));
+  p.appendChild(el("rect",{width:2.4,height:6,fill:cssv(c),"fill-opacity":0.95}));
   defs.appendChild(p); svg.appendChild(defs);
 }
 
 /* =============== KPIs =============== */
+function kpiHTML(k){
+  return `<div class="kpi"><div class="rail ${k.rail}"></div>
+      <div class="label">${k.label}</div>
+      <div class="value">${k.unit==="$"?'<small>$</small>'+k.value:k.value+(k.unit?`<small>${k.unit}</small>`:'')}</div>
+      <div class="foot">${k.foot}</div>
+    </div>`;
+}
 function renderKPIs(){
   const cur=weeks[weeks.length-1];
   const wallHits=allSessions.filter(s=>s.wall).length;
-  const maxWeeks=weeks.filter(w=>w.weeklyPeak>=100).length;
   const credits=weeks.reduce((a,w)=>a+w.creditUsd,0);
-  const k=[
-    {label:"weekly window — current", value:cur.weeklyPeak.toFixed(0), unit:"%", foot:`resets ${fmtDate(cur.end)} · ${cur.sessions.length} sessions`, rail:cur.weeklyPeak>=90?"crit":""},
-    {label:"hit the 5-hour wall", value:String(wallHits), unit:"×", foot:"sessions maxed at 100% of the 5h window", rail:wallHits?"crit":""},
-    {label:"weeks maxed (100%)", value:String(maxWeeks), unit:"", foot:`of ${NWEEKS} — out of weekly quota`, rail:maxWeeks?"crit":""},
-    {label:"credits spent", value:fmtUsd(credits).replace("$",""), unit:"$", foot:"pay-as-you-go, past the ceiling", rail:credits>0?"credit":""},
-  ];
-  document.getElementById("kpis").innerHTML=k.map(x=>`
-    <div class="kpi"><div class="rail ${x.rail}"></div>
-      <div class="label">${x.label}</div>
-      <div class="value">${x.unit==="$"?'<small>$</small>'+x.value:x.value+(x.unit?`<small>${x.unit}</small>`:'')}</div>
-      <div class="foot">${x.foot}</div>
-    </div>`).join("");
+  let k;
+  if(REAL){
+    const cc=DATA.surface_split.claude_code||0, chat=DATA.surface_split.chat||0;
+    k=[
+      {label:"weekly window — current", value:cur.weeklyPeak.toFixed(0), unit:"%", foot:`resets ${fmtDate(cur.end)} · ${cur.sessions.length} windows`, rail:cur.weeklyPeak>=90?"crit":""},
+      {label:"hit the 5-hour wall", value:String(wallHits), unit:"×", foot:"windows maxed at the 5h ceiling", rail:wallHits?"crit":""},
+      {label:"Claude Code share", value:String(cc), unit:"%", foot:`Chat ${chat}% · weekly surface split`, rail:""},
+      {label:"credits past the wall", value:String(Math.round(credits)), unit:"cr", foot:"pay-as-you-go past the 5h wall", rail:credits>0?"credit":""},
+    ];
+  } else {
+    const maxWeeks=weeks.filter(w=>w.weeklyPeak>=100).length;
+    k=[
+      {label:"weekly window — current", value:cur.weeklyPeak.toFixed(0), unit:"%", foot:`resets ${fmtDate(cur.end)} · ${cur.sessions.length} sessions`, rail:cur.weeklyPeak>=90?"crit":""},
+      {label:"hit the 5-hour wall", value:String(wallHits), unit:"×", foot:"sessions maxed at 100% of the 5h window", rail:wallHits?"crit":""},
+      {label:"weeks maxed (100%)", value:String(maxWeeks), unit:"", foot:`of ${NWEEKS} — out of weekly quota`, rail:maxWeeks?"crit":""},
+      {label:"credits spent", value:fmtUsd(credits).replace("$",""), unit:"$", foot:"pay-as-you-go, past the ceiling", rail:credits>0?"credit":""},
+    ];
+  }
+  document.getElementById("kpis").innerHTML=k.map(kpiHTML).join("");
 }
 
 /* =============== INSTRUMENT 1 — SESSION vs WEEK =============== */
@@ -330,73 +411,102 @@ function renderStacks(){
   addHatch(svg,"hatchStack");
   const W=1000,H=440, mL=46,mR=18,mT=42,mB=56;
   const plotW=W-mL-mR, plotH=H-mT-mB;
-  const yMax=118;                                   // headroom above 100% for the credit cap
-  const y=v=>mT+plotH-(v/yMax)*plotH;
-  const colGap=26, colW=(plotW-colGap*(NWEEKS-1))/NWEEKS;
-  const maxW=colW;                                  // rectangle width at sessionPct=100
+  const dom=zStacks||{a:0,b:118};                 // visible wk% window (zoomable on y)
+  const span=(dom.b-dom.a)||1;
+  const y=v=>mT+plotH-((v-dom.a)/span)*plotH;
+  const yInv=py=>dom.a+((mT+plotH-py)/plotH)*span;
+  const colGap=26;
+  let colW=Math.min((plotW-colGap*(NWEEKS-1))/NWEEKS, 150);
+  const maxW=colW;
+  const groupW=colW*NWEEKS+colGap*(NWEEKS-1);
+  const x0base=mL+Math.max(0,(plotW-groupW)/2);
 
-  // credit zone band (100→top)
-  svg.appendChild(el("rect",{x:mL,y:y(yMax),width:plotW,height:y(100)-y(yMax),fill:cssv("--credit"),"fill-opacity":0.05}));
-  // horizontal gridlines
-  for(let g=0; g<=100; g+=25){
-    const gy=y(g);
-    svg.appendChild(el("line",{x1:mL,y1:gy,x2:W-mR,y2:gy,class:"grid-line"}));
-    const tl=el("text",{x:mL-8,y:gy+3,class:"ax-label","text-anchor":"end"}); tl.textContent=g+"%"; svg.appendChild(tl);
-  }
-  // weekly ceiling (100%) + 90% danger line
-  svg.appendChild(el("line",{x1:mL,y1:y(100),x2:W-mR,y2:y(100),stroke:cssv("--critical"),"stroke-width":1.5}));
-  const cl=el("text",{x:W-mR,y:y(100)-6,class:"ax-label","text-anchor":"end",fill:cssv("--critical")}); cl.textContent="weekly ceiling"; svg.appendChild(cl);
-  svg.appendChild(el("line",{x1:mL,y1:y(90),x2:W-mR,y2:y(90),class:"grid-line dash",stroke:cssv("--critical"),opacity:0.6}));
-  svg.appendChild(Object.assign(el("text",{x:mL-8,y:y(yMax)+3,class:"ax-label","text-anchor":"end",fill:cssv("--credit")}),{textContent:""}));
+  // margin furniture (never clipped)
   const yaxT=el("text",{x:mL-8,y:mT-24,class:"ax-label","text-anchor":"end"}); yaxT.textContent="wk%"; svg.appendChild(yaxT);
+  const cl=el("text",{x:W-mR,y:y(100)-6,class:"ax-label","text-anchor":"end",fill:cssv("--critical")}); cl.textContent="weekly ceiling"; svg.appendChild(cl);
+  for(const g of niceTicks(dom.a,dom.b,5)){
+    const gy=y(g);
+    const tl=el("text",{x:mL-8,y:gy+3,class:"ax-label","text-anchor":"end"}); tl.textContent=Math.round(g)+"%"; svg.appendChild(tl);
+  }
+
+  // clipped plot content
+  const defs=el("defs",{}); const cp=el("clipPath",{id:"clipStacks"});
+  cp.appendChild(el("rect",{x:mL,y:mT,width:plotW,height:plotH})); defs.appendChild(cp); svg.appendChild(defs);
+  const g=el("g",{"clip-path":"url(#clipStacks)"}); svg.appendChild(g);
+
+  g.appendChild(el("rect",{x:mL,y:y(118),width:plotW,height:Math.max(0,y(100)-y(118)),fill:cssv("--credit"),"fill-opacity":0.05}));
+  for(const gv of niceTicks(dom.a,dom.b,5))
+    g.appendChild(el("line",{x1:mL,y1:y(gv),x2:W-mR,y2:y(gv),class:"grid-line"}));
+  g.appendChild(el("line",{x1:mL,y1:y(100),x2:W-mR,y2:y(100),stroke:cssv("--critical"),"stroke-width":1.5}));
+  g.appendChild(el("line",{x1:mL,y1:y(90),x2:W-mR,y2:y(90),class:"grid-line dash",stroke:cssv("--critical"),opacity:0.6}));
 
   weeks.forEach((wk,i)=>{
-    const x0=mL+i*(colW+colGap);
-    // envelope: 100% session × 100% weekly frame
-    svg.appendChild(el("rect",{x:x0,y:y(100),width:maxW,height:y(0)-y(100),rx:4,fill:"none",stroke:cssv("--border-2"),"stroke-width":1}));
-    // 5h ceiling wall (right edge of envelope)
-    svg.appendChild(el("line",{x1:x0+maxW,y1:y(0),x2:x0+maxW,y2:y(100),class:"grid-line dash",opacity:0.5}));
+    const x0=x0base+i*(colW+colGap);
+    g.appendChild(el("rect",{x:x0,y:y(100),width:maxW,height:y(0)-y(100),rx:4,fill:"none",stroke:cssv("--border-2"),"stroke-width":1}));
+    g.appendChild(el("line",{x1:x0+maxW,y1:y(0),x2:x0+maxW,y2:y(100),class:"grid-line dash",opacity:0.5}));
 
     let cum=0;
-    const segs=[...wk.sessions].filter(s=>!s.onCredits).sort((a,b)=>b.weeklyPct-a.weeklyPct);
+    // pre-capture baseline + growth outside any tracked window (incl. Chat)
+    if(wk.unobserved>0){
+      const yTop=y(wk.unobserved), rh=Math.max(1.4,y(0)-yTop-2);
+      const base=el("rect",{x:x0,y:yTop,width:maxW,height:rh,rx:2.5,
+        fill:cssv("--baseline"),"fill-opacity":0.5,stroke:cssv("--border-2"),"stroke-width":1,class:"stack-seg"});
+      base.addEventListener("mouseenter",e=>showTip(
+        `<div class="t-title"><span class="dot" style="background:${cssv('--baseline')}"></span>Outside tracked windows</div>
+         <div class="t-row"><span class="k">weekly window</span><span class="v">${wk.unobserved.toFixed(0)}%</span></div>
+         <div class="t-meta">before capture began + usage with no observed 5h window (includes Chat, which has no local transcript)</div>`,e));
+      base.addEventListener("mousemove",moveTip); base.addEventListener("mouseleave",hideTip);
+      g.appendChild(base);
+      cum=wk.unobserved;
+    }
+
+    const segs=[...wk.sessions].filter(s=>s.weeklyPct>0).sort((a,b)=>b.weeklyPct-a.weeklyPct);
     for(const s of segs){
-      const h=(s.weeklyPct/yMax)*plotH;
       const yTop=y(cum+s.weeklyPct);
       const wpx=Math.max(3,(s.sessionPct/100)*maxW);
-      const rect=el("rect",{x:x0,y:yTop,width:wpx,height:Math.max(1.4,h-2),rx:2.5,fill:catColor(s.cat),class:"stack-seg"});
-      bind(rect,s); svg.appendChild(rect);
-      // 5h-wall flag on the width axis: red cap at the rectangle's right edge
+      const rh=Math.max(1.4,y(cum)-yTop-2);
+      const rect=el("rect",{x:x0,y:yTop,width:wpx,height:rh,rx:2.5,fill:catColor(s.cat),class:"stack-seg"});
+      bind(rect,s); g.appendChild(rect);
+      if(s.onCredits && s.creditUsd>0){
+        const ov=el("rect",{x:x0,y:yTop,width:wpx,height:rh,rx:2.5,fill:"url(#hatchStack)",stroke:cssv("--credit"),"stroke-width":1});
+        ov.style.pointerEvents="none"; g.appendChild(ov);
+        const tag=el("text",{x:x0+wpx+5,y:yTop+rh/2+3,class:"col-cap",fill:cssv("--credit")}); tag.textContent="+"+fmtCreditVal(s.creditUsd); g.appendChild(tag);
+      }
       if(s.wall||s.nearWall){
-        const cap=el("line",{x1:x0+wpx,y1:yTop+0.5,x2:x0+wpx,y2:yTop+Math.max(1.4,h-2)-0.5,
+        const cap=el("line",{x1:x0+wpx,y1:yTop+0.5,x2:x0+wpx,y2:yTop+rh-0.5,
           stroke:cssv("--critical"),"stroke-width":s.wall?3:2, "stroke-linecap":"round", opacity:s.wall?1:0.7});
         if(s.nearWall) cap.setAttribute("stroke-dasharray","2 2");
-        cap.style.pointerEvents="none"; svg.appendChild(cap);
+        cap.style.pointerEvents="none"; g.appendChild(cap);
       }
       cum+=s.weeklyPct;
     }
-    // credit cap above 100%
-    if(wk.creditUsd>0){
-      const vis=Math.min(yMax-100, wk.creditUsd*2.4);
-      const yTop=y(100+vis);
-      const capH=y(100)-yTop;
+    // credit cap above 100% only when the WEEK itself blew past the weekly ceiling
+    if(wk.creditUsd>0 && wk.weeklyPeak>=100){
+      const vis=Math.min(18, wk.creditUsd*2.4);
+      const yTop=y(100+vis), capH=y(100)-yTop;
       const cr=el("rect",{x:x0,y:yTop,width:maxW*0.7,height:Math.max(3,capH),rx:2.5,fill:"url(#hatchStack)",stroke:cssv("--credit"),"stroke-width":1,class:"stack-seg"});
-      // synthetic session-like tip for the credit cap
       cr.addEventListener("mouseenter",e=>showTip(
         `<div class="t-title"><span class="dot" style="background:${cssv('--credit')}"></span>Credit overage</div>
          <div class="t-row"><span class="k">week of</span><span class="v">${fmtDate(wk.start)}</span></div>
-         <div class="t-row"><span class="k">credits</span><span class="v">${fmtUsd(wk.creditUsd)}</span></div>
+         <div class="t-row"><span class="k">credits</span><span class="v">${fmtCreditVal(wk.creditUsd)}</span></div>
          <div class="t-flag credit">▨ spent after weekly hit 100%</div>`,e));
       cr.addEventListener("mousemove",moveTip); cr.addEventListener("mouseleave",hideTip);
-      svg.appendChild(cr);
-      const cu=el("text",{x:x0,y:yTop-4,class:"col-cap",fill:cssv("--credit")}); cu.textContent="+"+fmtUsd(wk.creditUsd); svg.appendChild(cu);
+      g.appendChild(cr);
+      const cu=el("text",{x:x0,y:yTop-4,class:"col-cap",fill:cssv("--credit")}); cu.textContent="+"+fmtCreditVal(wk.creditUsd); g.appendChild(cu);
     }
-    // total + captions
-    const t=el("text",{x:x0,y:y(cum)-(wk.creditUsd>0?0:8),class:"col-total"});
-    if(wk.creditUsd===0){ t.textContent=cum.toFixed(0)+"%"; svg.appendChild(t); }
+    const t=el("text",{x:x0,y:y(cum)-8,class:"col-total"});
+    t.textContent=cum.toFixed(0)+"%"; g.appendChild(t);
+    // bottom captions (in the margin, never clipped)
     const c1=el("text",{x:x0,y:H-mB+20,class:"col-cap"}); c1.textContent=fmtDate(wk.start); svg.appendChild(c1);
-    const c2=el("text",{x:x0,y:H-mB+33,class:"col-cap"}); c2.textContent=wk.sessions.filter(s=>!s.onCredits).length+" sess"; svg.appendChild(c2);
+    const nwin=wk.sessions.filter(s=>s.weeklyPct>0).length;
+    const c2=el("text",{x:x0,y:H-mB+33,class:"col-cap"}); c2.textContent=nwin+(REAL?" win":" sess"); svg.appendChild(c2);
     if(i===NWEEKS-1){const now=el("text",{x:x0,y:H-mB+46,class:"col-cap",fill:cssv("--accent")});now.textContent="◀ current";svg.appendChild(now);}
   });
+
+  svg.__z={kind:"y", rect:{x:mL,y:mT,w:plotW,h:plotH}, dom, yInv,
+    setBox:(a,b)=>{zStacks={a:Math.max(-5,a),b:Math.min(140,b)};},
+    reset:()=>{zStacks=null;}, render:renderStacks};
+  updateZoomBtns();
 }
 
 /* =============== INSTRUMENT 2 — WEEK BURN-UP (small multiples) =============== */
@@ -404,80 +514,107 @@ function renderRidge(){
   const svg=document.getElementById("ridge"); svg.innerHTML="";
   addHatch(svg,"hatchRidge");
   const W=1000,H=260, sideL=6,sideR=6, mT=40,mB=30, gap=16;
-  const panelW=(W-sideL-sideR-gap*(NWEEKS-1))/NWEEKS;
+  let panelW=Math.min((W-sideL-sideR-gap*(NWEEKS-1))/NWEEKS, 260);
   const panelH=H-mT-mB;
+  const groupW=panelW*NWEEKS+gap*(NWEEKS-1);
+  const base=sideL+Math.max(0,(W-sideL-sideR-groupW)/2);
   const accent=cssv("--accent"), muted=cssv("--baseline"), ink2=cssv("--ink-2"), crit=cssv("--critical"), credit=cssv("--credit");
+  const dz=zRidge||{d0:0,d1:7,p0:0,p1:100};       // shared day × wk% window (zoomable)
+  const dSpan=(dz.d1-dz.d0)||1, pSpan=(dz.p1-dz.p0)||1;
+  const defs=el("defs",{}); svg.appendChild(defs);
+  const panels=[];
 
   weeks.forEach((wk,i)=>{
-    const px=sideL+i*(panelW+gap), py=mT;
+    const px=base+i*(panelW+gap), py=mT;
     const recent=i===NWEEKS-1;
     const col=recent?accent:muted;
     const strokeCol=recent?accent:ink2;
-    const xOf=day=>px+(day/7)*panelW;
-    const yOf=v=>py+panelH-(clamp(v,0,100)/100)*panelH;
+    const xOf=day=>px+((day-dz.d0)/dSpan)*panelW;
+    const yOf=v=>py+panelH-((v-dz.p0)/pSpan)*panelH;
 
-    // panel frame
+    // frame + margin labels (never clipped)
     svg.appendChild(el("rect",{x:px,y:py,width:panelW,height:panelH,rx:6,
       fill:cssv("--ink"),"fill-opacity":recent?0.03:0.014, stroke:recent?accent:cssv("--border-2"),"stroke-width":recent?1.3:1,"stroke-opacity":recent?0.5:1}));
-    // per-day faint verticals
-    for(let d=1; d<7; d++) svg.appendChild(el("line",{x1:xOf(d),y1:py,x2:xOf(d),y2:py+panelH,stroke:cssv("--grid"),"stroke-width":1,opacity:0.4}));
-    // red danger band 90→100
-    svg.appendChild(el("rect",{x:px,y:yOf(100),width:panelW,height:yOf(90)-yOf(100),fill:crit,"fill-opacity":0.08}));
-    // even-pace diagonal
-    svg.appendChild(el("line",{x1:xOf(0),y1:yOf(0),x2:xOf(7),y2:yOf(100),stroke:strokeCol,"stroke-width":1,"stroke-dasharray":"1 4","stroke-linecap":"round",opacity:0.5}));
 
-    // burn-up points (monotonic, step-after), capped at 100
-    const pts=[{day:0,cum:0}]; let cum=0;
-    for(const s of wk.sessions){
-      if(s.onCredits) continue;
-      const dayFrac=clamp(s.dayIdx+s.start.getUTCHours()/24,0,7);
-      cum+=s.weeklyPct; pts.push({day:dayFrac,cum:Math.min(100,cum)});
-    }
-    pts.push({day:7,cum:Math.min(100,cum)});
-    pts.sort((a,b)=>a.day-b.day);
+    const cid="clipR"+i, cp=el("clipPath",{id:cid});
+    cp.appendChild(el("rect",{x:px,y:py,width:panelW,height:panelH})); defs.appendChild(cp);
+    const g=el("g",{"clip-path":`url(#${cid})`}); svg.appendChild(g);
 
-    // area
-    const gid="grad"+i, defs=el("defs",{}), lg=el("linearGradient",{id:gid,x1:0,y1:0,x2:0,y2:1});
+    for(let d=Math.ceil(dz.d0); d<=Math.floor(dz.d1); d++) if(d>0&&d<7)
+      g.appendChild(el("line",{x1:xOf(d),y1:py,x2:xOf(d),y2:py+panelH,stroke:cssv("--grid"),"stroke-width":1,opacity:0.4}));
+    g.appendChild(el("rect",{x:px,y:yOf(100),width:panelW,height:Math.max(0,yOf(90)-yOf(100)),fill:crit,"fill-opacity":0.08}));
+    g.appendChild(el("line",{x1:xOf(0),y1:yOf(0),x2:xOf(7),y2:yOf(100),stroke:strokeCol,"stroke-width":1,"stroke-dasharray":"1 4","stroke-linecap":"round",opacity:0.5}));
+
+    const traj=REAL && wk.trajectory && wk.trajectory.length ? wk.trajectory : null;
+    const gid="grad"+i, lg=el("linearGradient",{id:gid,x1:0,y1:0,x2:0,y2:1});
     lg.appendChild(el("stop",{offset:"0%","stop-color":col,"stop-opacity":recent?0.4:0.32}));
     lg.appendChild(el("stop",{offset:"100%","stop-color":col,"stop-opacity":0.05}));
-    defs.appendChild(lg); svg.appendChild(defs);
-    let ad=`M ${xOf(0)} ${yOf(0)}`, prev=0;
-    for(const p of pts){ ad+=` L ${xOf(p.day)} ${yOf(prev)} L ${xOf(p.day)} ${yOf(p.cum)}`; prev=p.cum; }
-    ad+=` L ${xOf(7)} ${yOf(0)} Z`;
-    svg.appendChild(el("path",{d:ad,fill:`url(#${gid})`,stroke:"none"}));
-    // top edge
-    let ld=`M ${xOf(0)} ${yOf(0)}`; prev=0;
-    for(const p of pts){ ld+=` L ${xOf(p.day)} ${yOf(prev)} L ${xOf(p.day)} ${yOf(p.cum)}`; prev=p.cum; }
-    svg.appendChild(el("path",{d:ld,fill:"none",stroke:strokeCol,"stroke-width":recent?2.2:1.6,"stroke-linejoin":"round",opacity:recent?1:0.85}));
+    defs.appendChild(lg);
 
-    // credit sliver breaking above the frame top
-    if(wk.creditUsd>0){
-      const vis=Math.min(mT-14, wk.creditUsd*3);
-      svg.appendChild(el("rect",{x:xOf(7)-Math.min(26,panelW*0.5),y:py-vis,width:Math.min(26,panelW*0.5),height:vis,fill:"url(#hatchRidge)",stroke:credit,"stroke-width":1}));
-      const ct=el("text",{x:xOf(7),y:py-vis-4,class:"col-cap","text-anchor":"end",fill:credit}); ct.textContent="+"+fmtUsd(wk.creditUsd); svg.appendChild(ct);
+    if(traj){
+      const p0=traj[0], pN=traj[traj.length-1];
+      let ad=`M ${xOf(p0.d)} ${yOf(dz.p0)}`;
+      for(const p of traj) ad+=` L ${xOf(p.d)} ${yOf(p.pct)}`;
+      ad+=` L ${xOf(pN.d)} ${yOf(dz.p0)} Z`;
+      g.appendChild(el("path",{d:ad,fill:`url(#${gid})`,stroke:"none"}));
+      let ld=`M ${xOf(p0.d)} ${yOf(p0.pct)}`;
+      for(const p of traj.slice(1)) ld+=` L ${xOf(p.d)} ${yOf(p.pct)}`;
+      g.appendChild(el("path",{d:ld,fill:"none",stroke:strokeCol,"stroke-width":recent?2.2:1.6,"stroke-linejoin":"round",opacity:recent?1:0.85}));
+      g.appendChild(el("circle",{cx:xOf(p0.d),cy:yOf(p0.pct),r:2.4,fill:cssv("--surface"),stroke:strokeCol,"stroke-width":1.4}));
+      const cb=el("text",{x:xOf(p0.d),y:yOf(p0.pct)-7,class:"col-cap","text-anchor":"middle",fill:ink2}); cb.textContent="capture began"; g.appendChild(cb);
+      for(const s of wk.sessions){
+        const df=('dayFrac' in s)?s.dayFrac:clamp(s.dayIdx+s.start.getUTCHours()/24,0,7);
+        const val=Math.min(100, s.weeklyAtEnd!=null?s.weeklyAtEnd:0);
+        const inRed=val>=90;
+        const dot=el("circle",{cx:xOf(df),cy:yOf(val),r:Math.max(2.4,Math.sqrt(Math.max(s.weeklyPct,1))*1.6),
+          fill:s.onCredits?credit:(inRed?crit:strokeCol),stroke:cssv("--surface"),"stroke-width":1.2,class:"ridge-dot",opacity:recent?1:0.85});
+        bind(dot,s); g.appendChild(dot);
+      }
+    } else {
+      const pts=[{day:0,cum:0}]; let cum=0;
+      for(const s of wk.sessions){ if(s.onCredits) continue;
+        const dayFrac=clamp(s.dayIdx+s.start.getUTCHours()/24,0,7);
+        cum+=s.weeklyPct; pts.push({day:dayFrac,cum:Math.min(100,cum)}); }
+      pts.push({day:7,cum:Math.min(100,cum)}); pts.sort((a,b)=>a.day-b.day);
+      let ad=`M ${xOf(0)} ${yOf(0)}`, prev=0;
+      for(const p of pts){ ad+=` L ${xOf(p.day)} ${yOf(prev)} L ${xOf(p.day)} ${yOf(p.cum)}`; prev=p.cum; }
+      ad+=` L ${xOf(7)} ${yOf(0)} Z`;
+      g.appendChild(el("path",{d:ad,fill:`url(#${gid})`,stroke:"none"}));
+      let ld=`M ${xOf(0)} ${yOf(0)}`; prev=0;
+      for(const p of pts){ ld+=` L ${xOf(p.day)} ${yOf(prev)} L ${xOf(p.day)} ${yOf(p.cum)}`; prev=p.cum; }
+      g.appendChild(el("path",{d:ld,fill:"none",stroke:strokeCol,"stroke-width":recent?2.2:1.6,"stroke-linejoin":"round",opacity:recent?1:0.85}));
+      if(wk.creditUsd>0){                        // credit sliver breaks above the frame (unclipped)
+        const vis=Math.min(mT-14, wk.creditUsd*3);
+        svg.appendChild(el("rect",{x:xOf(7)-Math.min(26,panelW*0.5),y:py-vis,width:Math.min(26,panelW*0.5),height:vis,fill:"url(#hatchRidge)",stroke:credit,"stroke-width":1}));
+        const ct=el("text",{x:xOf(7),y:py-vis-4,class:"col-cap","text-anchor":"end",fill:credit}); ct.textContent="+"+fmtCreditVal(wk.creditUsd); svg.appendChild(ct);
+      }
+      let c2=0;
+      for(const s of wk.sessions){ if(s.onCredits) continue;
+        const dayFrac=clamp(s.dayIdx+s.start.getUTCHours()/24,0,7); c2+=s.weeklyPct;
+        const inRed=Math.min(100,c2)>=90;
+        const dot=el("circle",{cx:xOf(dayFrac),cy:yOf(Math.min(100,c2)),r:Math.max(2,Math.sqrt(s.weeklyPct)*1.35),
+          fill:inRed?crit:strokeCol,stroke:cssv("--surface"),"stroke-width":1,class:"ridge-dot",opacity:recent?1:0.85});
+        bind(dot,s); g.appendChild(dot);
+      }
     }
 
-    // session dots
-    let c2=0;
-    for(const s of wk.sessions){
-      if(s.onCredits) continue;
-      const dayFrac=clamp(s.dayIdx+s.start.getUTCHours()/24,0,7); c2+=s.weeklyPct;
-      const inRed=Math.min(100,c2)>=90;
-      const dot=el("circle",{cx:xOf(dayFrac),cy:yOf(Math.min(100,c2)),r:Math.max(2,Math.sqrt(s.weeklyPct)*1.35),
-        fill:inRed?crit:strokeCol,stroke:cssv("--surface"),"stroke-width":1,class:"ridge-dot",opacity:recent?1:0.85});
-      bind(dot,s); svg.appendChild(dot);
-    }
-
-    // header: date + peak%
     const dt=el("text",{x:px,y:py-16,class:"ridge-label"}); dt.textContent=fmtDate(wk.start);
     if(recent) dt.setAttribute("fill",accent); svg.appendChild(dt);
     const pk=el("text",{x:px+panelW,y:py-16,class:"col-total","text-anchor":"end"});
     pk.textContent=wk.weeklyPeak.toFixed(0)+"%"; if(wk.weeklyPeak>=100) pk.setAttribute("fill",crit); svg.appendChild(pk);
-    // footer: sessions + Thu→Thu
-    const ft=el("text",{x:px,y:py+panelH+16,class:"col-cap"}); ft.textContent=wk.sessions.filter(s=>!s.onCredits).length+" sess"; svg.appendChild(ft);
+    const nwin=wk.sessions.filter(s=>s.weeklyPct>0).length;
+    const ft=el("text",{x:px,y:py+panelH+16,class:"col-cap"}); ft.textContent=nwin+(REAL?" win":" sess"); svg.appendChild(ft);
     const ax=el("text",{x:px+panelW,y:py+panelH+16,class:"col-cap","text-anchor":"end"}); ax.textContent=recent?"now":"Thu→Thu";
     if(recent) ax.setAttribute("fill",accent); svg.appendChild(ax);
+    panels.push({x:px,y:py,w:panelW,h:panelH});
   });
+
+  svg.__z={kind:"xy", panels, dom:dz,
+    toData:(qx,qy)=>{ const p=panels.find(r=>qx>=r.x&&qx<=r.x+r.w)||panels[0];
+      return { d:dz.d0+((qx-p.x)/p.w)*dSpan, v:dz.p0+((p.y+p.h-qy)/p.h)*pSpan }; },
+    setBox:(d0,d1,p0,p1)=>{zRidge={d0:Math.max(-0.2,d0),d1:Math.min(7.2,d1),p0:Math.max(-2,p0),p1:Math.min(105,p1)};},
+    reset:()=>{zRidge=null;}, render:renderRidge};
+  updateZoomBtns();
 }
 
 /* ---- legends ---- */
@@ -487,14 +624,165 @@ function renderLegends(){
   const sw=document.getElementById("creditSwatch");
   sw.style.background=cssv("--credit"); sw.style.backgroundImage=
     `repeating-linear-gradient(45deg, transparent 0 2px, rgba(255,255,255,.5) 2px 3px)`;
+  document.getElementById("creditLegendTxt").textContent=REAL?"credits · past the 5h wall":"credits, past 100%";
 }
 
-document.getElementById("foot").innerHTML=
-  `data: <b>simulated</b> (seeded) · model mirrors <b>usage.db → snapshots</b>: session_pct, weekly_pct, extra_used_credits · 7-day windows reset Thu 07:00 UTC · `+
-  `weekly usage is monotonic (never falls within a window); session % and weekly % are <b>independent channels</b> (model weighting), never derived from one another.`;
+/* ---- copy for the active data source ---- */
+function renderCopy(){
+  if(REAL){
+    document.getElementById("eyebrow").textContent="Claude Code · Rate-limit tracker · "+(LIVE?"live":"snapshot");
+    const m=DATA.meta;
+    document.getElementById("sub").innerHTML=
+      `Two readings of one question: <b>how much of the weekly window does each 5-hour window burn — and when am I forced to stop?</b> `+
+      `Live from <b>usage.db</b> — ${m.n_windows} observed 5-hour windows across ${m.n_weeks} weekly window so far; coverage grows over time.`;
+    document.getElementById("desc1").innerHTML=
+      `Every observed 5-hour window is a rectangle: <b>width = how much of its 5-hour ceiling it reached</b>, <b>height = how much it added to the weekly window</b>. `+
+      `The grey base is usage <b>before capture began</b> plus growth with no observed window (Chat has no local transcript); together the tower's height is the real weekly burn. `+
+      `A red right edge means the window <b>hit the 5-hour wall</b>; <b>amber hatch</b> marks credits spent past that wall. Color = the window's dominant category by tokens (Claude Code only).`;
+    document.getElementById("desc2").innerHTML=
+      `The real weekly trajectory on a fixed 0→100% scale — weekly usage <b>only ever climbs</b>. The faint diagonal is an <b>even-pace</b> line: above it you're burning faster than the week affords, below it you're holding back. `+
+      `The line starts where capture first caught the window (not zero). Dots are 5-hour windows placed at the weekly level they reached; the <b>red zone</b> is past 90%.`;
+    const c=DATA.cost, gen=new Date(DATA.generated_at);
+    document.getElementById("foot").innerHTML=
+      `data: <b>usage.db</b> (live) · generated ${fmtDateTime(gen)} · weekly window resets Thu 07:00 UTC · `+
+      `session % and weekly % are <b>independent channels</b> (model weighting), never derived from one another · `+
+      `tokens & cost are <b>Claude Code only</b> — Chat has no local transcript (its share is the Tier-A split above) · `+
+      `cost is <b>notional</b> API list price (${fmtUsd(c.total)} across all harvested history), not a bill; credits past the 5-hour wall are the only real dollars · `+
+      `surface split (Tier A) is exact %, category split (Tier B) is a token-share approximation within Claude Code.`;
+  } else {
+    document.getElementById("eyebrow").textContent="Claude Code · Rate-limit tracker · demo (seeded)";
+    document.getElementById("sub").innerHTML=
+      `Two readings of one question: <b>how much of the weekly window does each 5-hour session burn — and when am I forced to stop?</b> <b>Simulated</b> data — append <code>?demo=1</code> is on; drop it for live capture.`;
+    document.getElementById("foot").innerHTML=
+      `data: <b>simulated</b> (seeded) · model mirrors <b>usage.db → snapshots</b>: session_pct, weekly_pct, extra_used_credits · 7-day windows reset Thu 07:00 UTC · `+
+      `weekly usage is monotonic (never falls within a window); session % and weekly % are <b>independent channels</b> (model weighting), never derived from one another.`;
+  }
+}
+
+/* ---- zoom: nice axis ticks, reset-button state, drag/scroll controller ---- */
+function niceTicks(a,b,n){
+  const span=(b-a)||1, mag=Math.pow(10,Math.floor(Math.log10(span/n))), norm=(span/n)/mag;
+  const step=(norm<1.5?1:norm<3?2:norm<7?5:10)*mag;
+  const ticks=[]; for(let v=Math.ceil(a/step)*step; v<=b+1e-9; v+=step) ticks.push(+v.toFixed(6));
+  return ticks;
+}
+function updateZoomBtns(){
+  const rs=document.getElementById("resetStacks"); if(rs) rs.hidden=!zStacks;
+  const rr=document.getElementById("resetRidge");  if(rr) rr.hidden=!zRidge;
+}
+function attachZoom(svgId){
+  const svg=document.getElementById(svgId);
+  let sel=null, start=null;
+  const pt=ev=>{ const r=svg.getBoundingClientRect(), vb=svg.viewBox.baseVal;
+    return { x:vb.x+(ev.clientX-r.left)/r.width*vb.width, y:vb.y+(ev.clientY-r.top)/r.height*vb.height }; };
+  const regionAt=(z,p)=> z.kind==="y" ? z.rect
+      : z.panels.find(r=>p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y&&p.y<=r.y+r.h);
+  svg.addEventListener("mousedown",ev=>{
+    if(ev.button!==0) return;
+    const z=svg.__z; if(!z) return;
+    const p=pt(ev), r=regionAt(z,p); if(!r) return;
+    start={p,r}; DRAGGING=true; hideTip();
+    sel=el("rect",{class:"zoom-sel",x:r.x,y:r.y,width:0,height:0}); svg.appendChild(sel);
+    ev.preventDefault();
+  });
+  svg.addEventListener("mousemove",ev=>{
+    if(!start) return;
+    const p=pt(ev), z=svg.__z, r=start.r;
+    const y0=Math.max(r.y,Math.min(start.p.y,p.y)), y1=Math.min(r.y+r.h,Math.max(start.p.y,p.y));
+    sel.setAttribute("y",y0); sel.setAttribute("height",Math.max(0,y1-y0));
+    if(z.kind==="y"){ sel.setAttribute("x",r.x); sel.setAttribute("width",r.w); }
+    else { const x0=Math.max(r.x,Math.min(start.p.x,p.x)), x1=Math.min(r.x+r.w,Math.max(start.p.x,p.x));
+      sel.setAttribute("x",x0); sel.setAttribute("width",Math.max(0,x1-x0)); }
+  });
+  function endDrag(ev){
+    if(!start) return;
+    const z=svg.__z, p=pt(ev), s=start;
+    if(sel){ sel.remove(); sel=null; }
+    start=null; DRAGGING=false;
+    if(Math.abs(p.x-s.p.x)<4 && Math.abs(p.y-s.p.y)<4) return;   // treat as click, not zoom
+    if(z.kind==="y"){
+      const a=z.yInv(Math.max(s.p.y,p.y)), b=z.yInv(Math.min(s.p.y,p.y));
+      if(b-a>1){ z.setBox(a,b); z.render(); }
+    } else {
+      const A=z.toData(Math.min(s.p.x,p.x),Math.max(s.p.y,p.y));
+      const B=z.toData(Math.max(s.p.x,p.x),Math.min(s.p.y,p.y));
+      if(B.d-A.d>0.05 && B.v-A.v>1){ z.setBox(A.d,B.d,A.v,B.v); z.render(); }
+    }
+  }
+  svg.addEventListener("mouseup",endDrag);
+  svg.addEventListener("mouseleave",ev=>{ if(start) endDrag(ev); });
+  svg.addEventListener("dblclick",()=>{ const z=svg.__z; if(z){ z.reset(); z.render(); } });
+  svg.addEventListener("wheel",ev=>{
+    const z=svg.__z; if(!z) return;
+    const p=pt(ev); if(!regionAt(z,p)) return;
+    ev.preventDefault();
+    const f=ev.deltaY<0?0.82:1.22, d=z.dom;
+    if(z.kind==="y"){ const c=z.yInv(p.y); z.setBox(c-(c-d.a)*f, c+(d.b-c)*f); }
+    else { const cur=z.toData(p.x,p.y);
+      z.setBox(cur.d-(cur.d-d.d0)*f, cur.d+(d.d1-cur.d)*f, cur.v-(cur.v-d.p0)*f, cur.v+(d.p1-cur.v)*f); }
+    z.render();
+  }, {passive:false});
+}
 
 function renderAll(){ renderKPIs(); renderLegends(); renderStacks(); renderRidge(); }
-renderAll();
+
+/* ---- live status strip + reset countdowns (fetch+poll mode only) ---- */
+function fmtAgo(ms){ const s=Math.max(0,Math.round(ms/1000));
+  if(s<60) return s+"s"; const m=Math.floor(s/60); if(m<60) return m+"m "+(s%60)+"s";
+  const h=Math.floor(m/60); return h+"h "+(m%60)+"m"; }
+function fmtLeft(ms){ if(ms<=0) return "now"; let s=Math.floor(ms/1000);
+  const d=Math.floor(s/86400); s-=d*86400; const h=Math.floor(s/3600); s-=h*3600;
+  const m=Math.floor(s/60); s-=m*60;
+  if(d>0) return d+"d "+h+"h"; if(h>0) return h+"h "+m+"m"; if(m>0) return m+"m "+s+"s"; return s+"s"; }
+function updateStatus(){
+  const bar=document.getElementById("livebar");
+  if(!LIVE){ bar.hidden=true; return; }
+  bar.hidden=false;
+  const now=Date.now();
+  const cur=(DATA&&DATA.current)||null;
+  const gen=(DATA&&DATA.generated_at)?new Date(DATA.generated_at).getTime():null;
+  const dot=CONN.ok?'<span class="live-dot ok"></span>live':'<span class="live-dot bad"></span>reconnecting…';
+  const bits=[`<span class="lb-item">${dot}</span>`];
+  if(gen) bits.push(`<span class="lb-item">updated ${fmtAgo(now-gen)} ago</span>`);
+  if(cur){
+    if(cur.weekly_resets_at){
+      const wl=new Date(cur.weekly_resets_at).getTime()-now;
+      bits.push(`<span class="lb-item">weekly ${cur.weekly_pct!=null?cur.weekly_pct+"% · ":""}resets in <b>${fmtLeft(wl)}</b></span>`);
+    }
+    if(cur.session_pct>0 && cur.session_resets_at){
+      const sl=new Date(cur.session_resets_at).getTime()-now;
+      bits.push(`<span class="lb-item">5-hr window <b>${cur.session_pct}%</b> · resets in <b>${fmtLeft(sl)}</b></span>`);
+    } else {
+      bits.push(`<span class="lb-item">5-hr window idle</span>`);
+    }
+  }
+  bar.innerHTML=bits.join("");
+}
+function tickCountdowns(){ if(LIVE) updateStatus(); }
+
+/* ---- bootstrap: demo | inlined artifact snapshot | live fetch+poll ---- */
+function loadLive(){
+  fetch("api/data",{cache:"no-store"})
+    .then(r=>r.ok?r.json():Promise.reject(new Error("HTTP "+r.status)))
+    .then(d=>{ if(d.error) throw new Error(d.error);
+      CONN={ok:true,err:null}; applyBuilt(buildReal(d), true, d); })
+    .catch(err=>{ CONN={ok:false,err:err.message};
+      if(!weeks.length){ applyBuilt(buildDemo(), false, null); LIVE=true; }
+      updateStatus(); });
+}
+if(FORCE_DEMO){
+  applyBuilt(buildDemo(), false, null);
+} else if(DATA){
+  applyBuilt(buildReal(DATA), true, DATA);
+} else {
+  LIVE=true; loadLive(); setInterval(loadLive, REFRESH_MS);
+}
+setInterval(tickCountdowns, 1000);
+
+/* ---- zoom wiring (reads svg.__z, set on each render) ---- */
+attachZoom("stacks"); attachZoom("ridge");
+document.getElementById("resetStacks").addEventListener("click",()=>{ zStacks=null; renderStacks(); });
+document.getElementById("resetRidge").addEventListener("click",()=>{ zRidge=null; renderRidge(); });
 
 /* ---- theme toggle ---- */
 const btn=document.getElementById("themeBtn"),lbl=document.getElementById("themeLbl");
