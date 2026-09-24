@@ -87,8 +87,10 @@ Three layers, all pushing to the same ntfy topic:
 - **A timer silently stops or drifts** — the 5-minute poller is the watchdog for the
   hourly/monthly timers (`alert.check_pipeline`): it alerts if the harvest heartbeat
   goes stale (timer dead), if a harvest read new transcript bytes but parsed **zero**
-  turns (Claude Code changed the transcript format), or if a model in `turns` has no
-  price row (cost undercounting).
+  turns (Claude Code changed the transcript format), if a model in `turns` has no
+  price row (cost undercounting), or if the dashboard's `/api/health` doesn't answer
+  (unit stopped or never restarted — `OnFailure` only sees crashes). Set
+  `dashboard_health_url` to `null` in `alert_config.json` to turn that check off.
 
 Residual gap: if the **poller itself** stops firing while you're logged in, nothing
 external notices (its watchdog can't run). `enable-linger` keeps the timers running

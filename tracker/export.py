@@ -80,6 +80,19 @@ def _merge_session_windows(conn):
     ):
         key_stats[r["k"]] = r
 
+    # weekly_pct resets to 0 at the weekly boundary, so a window straddling it must
+    # only diff snapshots from one weekly key (see build()).
+    weekly_by_key = defaultdict(dict)
+    for r in conn.execute(
+        """SELECT substr(session_resets_at,1,16) AS k, substr(weekly_resets_at,1,16) AS wk,
+                  MIN(weekly_pct) AS w0, MAX(weekly_pct) AS w1
+             FROM snapshots
+            WHERE status='ok' AND session_resets_at IS NOT NULL
+              AND weekly_resets_at IS NOT NULL
+            GROUP BY k, wk"""
+    ):
+        weekly_by_key[r["k"]][r["wk"]] = (r["w0"], r["w1"])
+
     windows = []
     for cid, members in groups.items():
         start = min(m[0] for m in members)
@@ -88,9 +101,15 @@ def _merge_session_windows(conn):
         peak = max((key_stats[k]["peak"] for k in keys if k in key_stats), default=0.0)
         w0 = min((key_stats[k]["w0"] for k in keys if k in key_stats), default=0.0)
         w1 = max((key_stats[k]["w1"] for k in keys if k in key_stats), default=0.0)
+        by_wk = {}
+        for k in keys:
+            for wk, (a, b) in weekly_by_key.get(k, {}).items():
+                lo, hi = by_wk.get(wk, (a, b))
+                by_wk[wk] = (min(lo, a), max(hi, b))
         windows.append({"start": start, "end": end, "keys": keys,
                         "peak_session_pct": peak,
-                        "weekly_at_start": w0, "weekly_at_end": w1})
+                        "weekly_at_start": w0, "weekly_at_end": w1,
+                        "weekly_by_wk": by_wk})
     windows.sort(key=lambda w: w["start"])
     return windows
 
@@ -266,13 +285,13 @@ def build(conn) -> dict:
     credits = _credit_deltas(conn, windows)
     weeks_meta = _weekly_windows(conn)
 
-    # map each session window to a weekly window by its end instant
+    # map each session window to the weekly window containing its start: a window
+    # straddling the weekly reset is filed under the week its work began in
     wk_starts = [w["start"] for w in weeks_meta]
     wk_ends = [w["end"] for w in weeks_meta]
 
     week_sessions = defaultdict(list)
     for wi, w in enumerate(windows):
-        weekly_delta = max(0.0, w["weekly_at_end"] - w["weekly_at_start"])
         peak = w["peak_session_pct"]
         # dominant category by token share
         if cat_tok[wi]:
@@ -283,24 +302,28 @@ def build(conn) -> dict:
             ({"cat": c, "tokens": cat_tok[wi][c], "cost": round(cat_cost[wi][c], 2)}
              for c in cat_tok[wi]),
             key=lambda x: -x["tokens"])
-        wkidx = _bucket_index(wk_starts, wk_ends, w["end"])
+        wkidx = _bucket_index(wk_starts, wk_ends, w["start"])
         if wkidx is None:
             wkidx = len(weeks_meta) - 1 if weeks_meta else 0
         wk = weeks_meta[wkidx] if weeks_meta else None
         day_frac = (max(0.0, min(7.0, (w["end"] - wk["start"]).total_seconds() / DAY))
                     if wk else 0.0)
+        seg = [v for k, v in w["weekly_by_wk"].items() if wk and k in wk["keys"]]
+        w0 = min((a for a, _ in seg), default=w["weekly_at_start"])
+        w1 = max((b for _, b in seg), default=w["weekly_at_end"])
+        weekly_delta = max(0.0, w1 - w0)
         cred = credits[wi]
         sess = {
             "weekIdx": wkidx,
-            "dayIdx": int(day_frac),
+            "dayIdx": min(6, int(day_frac)),
             "dayFrac": round(day_frac, 3),
             "start": w["start"].isoformat(),
             "end": w["end"].isoformat(),
             "durH": round(durs[wi], 2),
             "sessionPct": round(peak, 1),
             "weeklyPct": round(weekly_delta, 1),
-            "weeklyAtStart": round(w["weekly_at_start"], 1),
-            "weeklyAtEnd": round(w["weekly_at_end"], 1),
+            "weeklyAtStart": round(w0, 1),
+            "weeklyAtEnd": round(w1, 1),
             "catKey": dom,
             "tokens": tot_tok[wi],
             "cost": round(tot_cost[wi], 2),

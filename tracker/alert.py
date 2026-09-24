@@ -15,7 +15,9 @@ CONFIG_PATH = ROOT / "alert_config.json"
 STATE_PATH = ROOT / "data" / "alert_state.json"
 
 FAIL_STATUSES = {"http_error", "schema_error", "network_error"}
-DEFAULTS = {"warn_minutes": 30, "realert_minutes": 60, "stale_minutes": 15}
+DEFAULTS = {"warn_minutes": 30, "realert_minutes": 60, "stale_minutes": 15,
+            # null disables the dashboard liveness check
+            "dashboard_health_url": "http://127.0.0.1:8787/api/health"}
 
 
 def _config() -> dict:
@@ -142,13 +144,22 @@ def _load_pipeline() -> dict:
         return {}
 
 
+def _dashboard_up(url: str) -> bool:
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+
 def _meta(conn) -> dict:
     return {k: v for k, v in conn.execute("SELECT k, v FROM harvest_meta")}
 
 
 def check_pipeline(conn, now: datetime | None = None) -> dict:
     """Detect the silent failures OnFailure can't: a timer that stopped firing, a
-    harvest that recognizes nothing (transcript format drift), or an unpriced model.
+    harvest that recognizes nothing (transcript format drift), an unpriced model,
+    or a dashboard that isn't serving.
     No-op (and never raises) if the Phase-2 tables aren't present yet."""
     now = now or datetime.now(timezone.utc)
     cfg = _config()
@@ -186,6 +197,13 @@ def check_pipeline(conn, now: datetime | None = None) -> dict:
     if gaps:
         issues.append(("price_coverage", "Unpriced model(s)",
                        f"Cost undercounts: {', '.join(gaps)}"))
+
+    # OnFailure only fires on a crash; a dashboard unit that was stopped or never
+    # came back sits "inactive" with nothing to alert on.
+    dash_url = cfg.get("dashboard_health_url")
+    if dash_url and not _dashboard_up(dash_url):
+        issues.append(("dashboard_down", "Dashboard down",
+                       f"{dash_url} not responding — `systemctl --user status usage-dashboard`."))
 
     state = _load_pipeline()
     fired = []
