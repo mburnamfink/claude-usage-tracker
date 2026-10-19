@@ -167,6 +167,7 @@ PRICE_VALID_FROM = "2025-01-01"
 PRICE_SOURCE = "litellm+anthropic-1h-2x@2026-09"
 # model: (input, output)  -> cache rates derived below
 _BASE = {
+    "claude-opus-5-5":             (5.0, 25.0),
     "claude-opus-5":               (5.0, 25.0),
     "claude-opus-4-8":             (5.0, 25.0),
     "claude-sonnet-5":             (2.0, 10.0),
