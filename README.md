@@ -63,15 +63,41 @@ cd tracker && ~/work/bin/python tokens.py            # harvest now
 cd tracker && ~/work/bin/python refresh_prices.py --dry-run   # preview price changes
 ```
 
-Install the timers (harvest hourly, prices monthly, log compaction weekly) plus
-the shared failure notifier:
+Install the timers (ingest + harvest every 5 min, DB backup daily, prices monthly,
+log compaction weekly) plus the shared failure notifier:
 
 ```sh
-cp deploy/usage-harvest.* deploy/usage-prices.* deploy/usage-maintenance.* \
-   deploy/usage-alert@.service  ~/.config/systemd/user/
+cp deploy/usage-ingest.* deploy/usage-backup.* deploy/usage-prices.* \
+   deploy/usage-maintenance.* deploy/usage-alert@.service  ~/.config/systemd/user/
 systemctl --user daemon-reload
-systemctl --user enable --now usage-harvest.timer usage-prices.timer usage-maintenance.timer
+systemctl --user enable --now usage-ingest.timer usage-backup.timer \
+   usage-prices.timer usage-maintenance.timer
 ```
+
+Upgrading from the hourly harvest timer: `systemctl --user disable --now usage-harvest.timer`
+and delete `~/.config/systemd/user/usage-harvest.*`.
+
+## Phase 4 — multi-device
+
+Token usage lives in each machine's transcripts, so one server (piehole) holds the DB
+and every other machine pushes to it. See
+[docs/phase-4-multi-device.md](docs/phase-4-multi-device.md) for the design.
+
+- The server polls and harvests its own `~/.claude/projects` as device `device_name`
+  (default: hostname).
+- Edges rsync into `data/inbox/<device>/projects/` (transcript mirror) and
+  `data/inbox/<device>/outbox/` (usage-endpoint calls made on the edge, so its OAuth
+  token never leaves it). `tracker/ingest.py` loads both; every write is idempotent
+  (snapshots keyed `(device, captured_at)`, turns by `message_id`), so retries and the
+  same transcript on two machines never double-count.
+- Malformed outbox files are moved to `data/inbox/<device>/rejected/`.
+- `data/backup/` holds 14 daily SQLite online backups — same disk, so copy them off-box.
+
+New `alert_config.json` keys: `device_name`, `inbox_dir` (default `data/inbox`),
+`healthcheck_url` (dead-man's switch pinged by every ingest, e.g. healthchecks.io —
+the only thing that notices the server itself dying), `disk_warn_pct` (default 85).
+
+Tests: `~/work/bin/python -m unittest discover -s tests -v`
 
 The harvest opens the DB in WAL mode so it can run while the 5-minute poller
 writes; both are short, idempotent transactions.
@@ -85,7 +111,7 @@ Three layers, all pushing to the same ntfy topic:
 - **A service crashes** (broken `~/work` venv, disk full, DB locked, an exception in
   any unit) — every unit has `OnFailure=usage-alert@…`, which fires a notification.
 - **A timer silently stops or drifts** — the 5-minute poller is the watchdog for the
-  hourly/monthly timers (`alert.check_pipeline`): it alerts if the harvest heartbeat
+  ingest/price timers (`alert.check_pipeline`): it alerts if the harvest heartbeat
   goes stale (timer dead), if a harvest read new transcript bytes but parsed **zero**
   turns (Claude Code changed the transcript format), if a model in `turns` has no
   price row (cost undercounting), or if the dashboard's `/api/health` doesn't answer

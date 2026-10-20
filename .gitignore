@@ -1,6 +1,9 @@
 # Runtime capture — personal usage/spend data, not for version control
 data/usage.db*
 data/raw/
+# edge pushes (full transcripts) and local DB backups
+data/inbox/
+data/backup/
 # report.py output inlines the private usage snapshot; regenerate, don't commit
 display/quota-telemetry.generated.html
 

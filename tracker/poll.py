@@ -101,10 +101,10 @@ def parse(payload: dict) -> dict:
     }
 
 
-def append_raw(payload: dict, captured_at: str) -> None:
+def append_raw(payload: dict, captured_at: str, device: str | None = None) -> None:
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     day = captured_at[:10]
-    line = json.dumps({"captured_at": captured_at, "response": payload})
+    line = json.dumps({"captured_at": captured_at, "device": device, "response": payload})
     with open(RAW_DIR / f"{day}.jsonl", "a") as f:
         f.write(line + "\n")
 
@@ -117,7 +117,13 @@ def classify(token, expired) -> tuple[dict, dict | None]:
         return row, None
 
     code, payload, neterr = fetch_usage(token)
-    row["http_code"] = code
+    row.update(status_row(code, payload, neterr))
+    return row, payload
+
+
+def status_row(code, payload, neterr) -> dict:
+    """Snapshot fields for one endpoint call; shared with ingest for edge-polled calls."""
+    row = {"http_code": code}
     if neterr is not None:
         row["status"] = "network_error"
     elif code == 200 and payload is not None:
@@ -131,16 +137,18 @@ def classify(token, expired) -> tuple[dict, dict | None]:
         row["status"] = "token_expired"
     else:
         row["status"] = "http_error"
-    return row, payload
+    return row
 
 
 def main() -> int:
     token, expired = load_token()
     row, payload = classify(token, expired)
+    row["device"] = alert.device_name()
+    row["received_at"] = row["captured_at"]
 
     # keep the raw body whenever we got one back — invaluable if the schema shifts
     if row["status"] in ("ok", "schema_error") and payload is not None:
-        append_raw(payload, row["captured_at"])
+        append_raw(payload, row["captured_at"], row["device"])
 
     with db.connect() as conn:
         db.insert_snapshot(conn, row)

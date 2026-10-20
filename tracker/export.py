@@ -16,13 +16,16 @@ import bisect
 import json
 import sys
 from collections import defaultdict
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import tokens
 
 DAY = 86400.0
 MERGE_EPS = timedelta(minutes=5)     # collapse minute-jitter window keys into one window
 WEEK_MERGE_EPS = timedelta(minutes=30)
+# extra_used_credits falling below this fraction of its running max is the monthly
+# rollover; a smaller dip is an out-of-order reading from another device
+CREDIT_ROLLOVER_FRAC = 0.5
 
 # Real category key -> (display name, CSS custom-property carrying its color).
 # Keys not listed fall back to the misc slot. tokens.SEED_RULES emits:
@@ -196,27 +199,45 @@ def _turn_span_hours(conn, windows):
 
 
 def _credit_deltas(conn, windows):
-    """Positive deltas of extra_used_credits, bucketed into the active window.
+    """Growth of extra_used_credits, bucketed into the active window.
 
-    A monthly rollover resets the counter (a large drop); we ignore negative deltas
-    so the reset never registers as spend. Returns per-window summed credit units."""
+    Spend is measured against the running max, not the previous reading: snapshots
+    from several devices interleave by their own clocks, so a slightly stale reading
+    (10.0, 9.9, 10.0) must not count the recovery as new spend. A large drop is the
+    monthly rollover and restarts the max. Returns per-window summed credit units."""
     starts = [w["start"] for w in windows]
     ends = [w["end"] for w in windows]
     per = [0.0] * len(windows)
-    prev = None
+    high = None
     for r in conn.execute(
         """SELECT captured_at, extra_used_credits FROM snapshots
             WHERE status='ok' AND extra_used_credits IS NOT NULL
             ORDER BY captured_at"""
     ):
         cur = r["extra_used_credits"]
-        if prev is not None and cur > prev:
+        if high is None or cur < high * CREDIT_ROLLOVER_FRAC:
+            high = cur
+            continue
+        if cur > high:
             t = tokens._parse_iso(r["captured_at"])
             wi = _bucket_index(starts, ends, t)
             if wi is not None:
-                per[wi] += cur - prev
-        prev = cur
+                per[wi] += cur - high
+            high = cur
     return per
+
+
+def _devices(conn):
+    """Per machine: newest activity seen and Claude Code tokens in the last 7 days."""
+    since = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S")
+    tok = {r[0]: r[1] for r in conn.execute(
+        """SELECT device, SUM(input_tokens + output_tokens + cache_read_tokens
+                              + cache_write_5m + cache_write_1h)
+             FROM turns WHERE ts >= ? GROUP BY device""", (since,))}
+    return [{"name": r["name"], "last_seen_at": r["last_seen_at"],
+             "tokens_7d": tok.get(r["name"]) or 0}
+            for r in conn.execute(
+                "SELECT name, last_seen_at FROM devices ORDER BY last_seen_at DESC")]
 
 
 def _weekly_windows(conn):
@@ -398,6 +419,7 @@ def build(conn) -> dict:
             "by_model": {k: round(v, 2) for k, v in by_model.items()},
         },
         "weeks": weeks,
+        "devices": _devices(conn),
         "meta": {
             "n_windows": len(windows),
             "n_weeks": len(weeks),

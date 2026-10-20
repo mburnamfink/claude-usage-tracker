@@ -1,0 +1,8 @@
+[Unit]
+Description=Poll the Claude usage endpoint and push the outbox to the tracker server
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/usage-edge.sh snap

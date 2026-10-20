@@ -643,8 +643,10 @@ function renderCopy(){
       `The real weekly trajectory on a fixed 0→100% scale — weekly usage <b>only ever climbs</b>. The faint diagonal is an <b>even-pace</b> line: above it you're burning faster than the week affords, below it you're holding back. `+
       `The line starts where capture first caught the window (not zero). Dots are 5-hour windows placed at the weekly level they reached; the <b>red zone</b> is past 90%.`;
     const c=DATA.cost, gen=new Date(DATA.generated_at);
+    const devs=(DATA.devices||[]).map(d=>`<b>${d.name}</b> seen ${d.last_seen_at?fmtDateTime(new Date(d.last_seen_at)):"never"} (${fmtTok(d.tokens_7d)} tok/7d)`).join(", ");
     document.getElementById("foot").innerHTML=
       `data: <b>usage.db</b> (live) · generated ${fmtDateTime(gen)} · weekly window resets Thu 07:00 UTC · `+
+      (devs?`devices: ${devs} · `:"")+
       `session % and weekly % are <b>independent channels</b> (model weighting), never derived from one another · `+
       `tokens & cost are <b>Claude Code only</b> — Chat has no local transcript (its share is the Tier-A split above) · `+
       `cost is <b>notional</b> API list price (${fmtUsd(c.total)} across all harvested history), not a bill; credits past the 5-hour wall are the only real dollars · `+

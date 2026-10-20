@@ -6,6 +6,8 @@ on token_expired, which just means Claude Code isn't running and we have no
 valid token to poll with (i.e. "not monitoring", not "broken").
 """
 import json
+import shutil
+import socket
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,7 +19,14 @@ STATE_PATH = ROOT / "data" / "alert_state.json"
 FAIL_STATUSES = {"http_error", "schema_error", "network_error"}
 DEFAULTS = {"warn_minutes": 30, "realert_minutes": 60, "stale_minutes": 15,
             # null disables the dashboard liveness check
-            "dashboard_health_url": "http://127.0.0.1:8787/api/health"}
+            "dashboard_health_url": "http://127.0.0.1:8787/api/health",
+            # this machine's name in snapshots/turns; edges use their Tailscale node name
+            "device_name": None,
+            # where edges rsync to: <inbox_dir>/<device>/{projects,outbox}/ (relative to ROOT)
+            "inbox_dir": "data/inbox",
+            # external dead-man's switch (e.g. healthchecks.io) pinged by every ingest run
+            "healthcheck_url": None,
+            "disk_warn_pct": 85}
 
 
 def _config() -> dict:
@@ -27,6 +36,14 @@ def _config() -> dict:
     except (OSError, ValueError):
         pass
     return cfg
+
+
+def device_name() -> str:
+    return _config().get("device_name") or socket.gethostname()
+
+
+def inbox_dir() -> Path:
+    return ROOT / _config()["inbox_dir"]
 
 
 def _load_state() -> dict:
@@ -125,14 +142,14 @@ def check_health(conn, now: datetime | None = None) -> dict:
     return {"action": "none", "reason": "already alerted"}
 
 
-# ---- pipeline health: the poller watches the two hourly/monthly timers ----
+# ---- pipeline health: the poller watches the ingest and price timers ----
 # The poller runs every 5 min and already has ntfy plumbing, so it is the natural
-# watchdog for the harvest + price timers, which have no alerting of their own.
+# watchdog for the ingest + price timers, which have no alerting of their own.
 # Breadcrumbs live in harvest_meta (written by tokens.harvest / refresh_prices).
 
 PIPELINE_STATE = ROOT / "data" / "pipeline_state.json"
 # thresholds in hours; realert once per HARVEST_STALE window to avoid spam
-HARVEST_STALE_H = 3          # hourly timer: 3 missed runs = something's wrong
+HARVEST_STALE_H = 3          # ingest harvests every 5 min; 3 h of silence = timer dead
 PRICE_STALE_H = 24 * 40      # monthly timer: ~40 days
 CANARY_MIN_BYTES = 50_000    # a substantial append that yields nothing = format drift
 
@@ -197,6 +214,13 @@ def check_pipeline(conn, now: datetime | None = None) -> dict:
     if gaps:
         issues.append(("price_coverage", "Unpriced model(s)",
                        f"Cost undercounts: {', '.join(gaps)}"))
+
+    disk = shutil.disk_usage(ROOT / "data" if (ROOT / "data").exists() else ROOT)
+    used_pct = 100 * disk.used / disk.total
+    if used_pct > cfg["disk_warn_pct"]:
+        issues.append(("disk_high", "Disk filling up",
+                       f"{used_pct:.0f}% used on the filesystem holding data/ "
+                       f"(transcript inbox grows ~5 GB/yr per heavy device)."))
 
     # OnFailure only fires on a crash; a dashboard unit that was stopped or never
     # came back sits "inactive" with nothing to alert on.

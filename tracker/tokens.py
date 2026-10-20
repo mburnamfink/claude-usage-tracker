@@ -1,6 +1,7 @@
 """Incremental token harvester.
 
-Walks Claude Code transcripts (`~/.claude/projects/**/*.jsonl`), dedups assistant
+Walks Claude Code transcripts (`~/.claude/projects/**/*.jsonl` on this machine, plus
+each edge device's rsynced copy under `<inbox>/<device>/projects/`), dedups assistant
 turns, and stores per-turn token usage in usage.db so the token history OUTLIVES the
 transcripts' ~30-day retention. Stdlib only. Safe to run every few minutes: unchanged
 files cost one stat(); a growing file is read only from where we left off.
@@ -30,6 +31,9 @@ Footguns and how each is defused:
                                                           and re-read from offset 0.
   * Files vanishing at retention                      -> harvested turns are kept; a missing file is skipped.
   * Concurrent poller writes                          -> WAL + busy_timeout + short per-file transactions.
+  * Same transcript on two devices (copied ~/.claude) -> message_id is global, so it merges into one row.
+  * rsync appending to an inbox file mid-read         -> same partial-line rule; --append-verify writes in
+                                                          place, and its full-resend fallback is a new inode.
 """
 import bisect
 import glob
@@ -41,6 +45,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import alert
 import db
 
 PROJECTS = Path.home() / ".claude" / "projects"
@@ -60,7 +65,8 @@ CREATE TABLE IF NOT EXISTS turns (
   cwd               TEXT,               -- category signal (derived at read time)
   is_sidechain      INTEGER DEFAULT 0,  -- sub-agent turns; they still count
   session_id        TEXT,
-  source_file       TEXT
+  source_file       TEXT,
+  device            TEXT                -- machine of the latest sighting; display only
 );
 CREATE INDEX IF NOT EXISTS idx_turns_ts ON turns(ts);
 
@@ -88,7 +94,7 @@ CREATE TABLE IF NOT EXISTS window_tokens (
   PRIMARY KEY (session_key, model)
 );
 
--- heartbeat + last-run stats, so the 5-minute poller can tell if the hourly
+-- heartbeat + last-run stats, so the 5-minute poller can tell if the
 -- harvest silently stopped or started recognizing nothing (format drift).
 CREATE TABLE IF NOT EXISTS harvest_meta (k TEXT PRIMARY KEY, v TEXT);
 
@@ -195,10 +201,10 @@ def _seed_price_rows():
 UPSERT = """
 INSERT INTO turns (message_id, ts, model, input_tokens, output_tokens,
                    cache_read_tokens, cache_write_5m, cache_write_1h,
-                   cwd, is_sidechain, session_id, source_file)
+                   cwd, is_sidechain, session_id, source_file, device)
 VALUES (:message_id,:ts,:model,:input_tokens,:output_tokens,
         :cache_read_tokens,:cache_write_5m,:cache_write_1h,
-        :cwd,:is_sidechain,:session_id,:source_file)
+        :cwd,:is_sidechain,:session_id,:source_file,:device)
 ON CONFLICT(message_id) DO UPDATE SET
   output_tokens     = MAX(turns.output_tokens,     excluded.output_tokens),
   input_tokens      = MAX(turns.input_tokens,      excluded.input_tokens),
@@ -207,7 +213,7 @@ ON CONFLICT(message_id) DO UPDATE SET
   cache_write_1h    = MAX(turns.cache_write_1h,    excluded.cache_write_1h),
   ts=excluded.ts, model=excluded.model, cwd=excluded.cwd,
   is_sidechain=excluded.is_sidechain, session_id=excluded.session_id,
-  source_file=excluded.source_file
+  source_file=excluded.source_file, device=excluded.device
 """
 
 
@@ -217,6 +223,7 @@ def _connect() -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")   # let the poller write while we read
     conn.execute("PRAGMA busy_timeout=5000")
     conn.executescript(SCHEMA)
+    _migrate(conn)
     if conn.execute("SELECT COUNT(*) FROM category_rules").fetchone()[0] == 0:
         conn.executemany(
             "INSERT INTO category_rules (seq, field, op, pattern, category) VALUES (?,?,?,?,?)",
@@ -233,6 +240,36 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
+def _migrate(conn) -> None:
+    """Bring a single-device DB up to the multi-device schema (idempotent)."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(turns)")}
+    if "device" in cols:
+        return
+    with conn:
+        conn.execute("ALTER TABLE turns ADD COLUMN device TEXT")
+        # A turn whose transcript is on this disk came from this machine; the rest were
+        # harvested elsewhere before the DB moved here. An edge's push re-sights any
+        # that still exist and overwrites 'legacy' with its own name.
+        here = alert.device_name()
+        files = [r[0] for r in conn.execute("SELECT DISTINCT source_file FROM turns")]
+        for f in files:
+            conn.execute("UPDATE turns SET device=? WHERE source_file IS ?",
+                         (here if f and os.path.exists(f) else "legacy", f))
+        # resume cursors for files that only existed on the previous host
+        stale = [r[0] for r in conn.execute("SELECT path FROM harvest_files")
+                 if not os.path.exists(r[0])]
+        conn.executemany("DELETE FROM harvest_files WHERE path=?", [(x,) for x in stale])
+
+
+def default_roots(inbox: Path | None = None) -> list[tuple[str, Path]]:
+    """(device, transcript dir) pairs: this machine first, then every edge inbox."""
+    roots = [(alert.device_name(), PROJECTS)]
+    inbox = alert.inbox_dir() if inbox is None else inbox
+    if inbox.is_dir():
+        roots += [(d.name, d / "projects") for d in sorted(inbox.iterdir()) if d.is_dir()]
+    return roots
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -244,7 +281,7 @@ def _parse_iso(s: str):
         return None
 
 
-def _parse_line(raw: bytes, source_file: str, session_hint: str):
+def _parse_line(raw: bytes, source_file: str, session_hint: str, device: str):
     # cheap reject before JSON: an assistant-usage line contains both markers
     if b'"assistant"' not in raw or b'"usage"' not in raw or len(raw) > MAX_LINE:
         return None
@@ -275,10 +312,11 @@ def _parse_line(raw: bytes, source_file: str, session_hint: str):
         "is_sidechain": 1 if o.get("isSidechain") else 0,
         "session_id": o.get("sessionId") or session_hint,
         "source_file": source_file,
+        "device": device,
     }
 
 
-def _read_appended(path: str, start_offset: int):
+def _read_appended(path: str, start_offset: int, device: str):
     """Parse turns from the bytes after start_offset.
 
     Returns (turns, new_offset). Only complete (newline-terminated) lines are
@@ -306,23 +344,29 @@ def _read_appended(path: str, start_offset: int):
                     if title:
                         latest_title = title
                 continue
-            t = _parse_line(raw[:-1], path, session_hint)
+            t = _parse_line(raw[:-1], path, session_hint, device)
             if t:
                 turns.append(t)
     return turns, latest_title, start_offset + consumed
 
 
-def harvest(verbose: bool = False) -> dict:
+def harvest(roots=None, verbose: bool = False) -> dict:
+    """Harvest every (device, dir) root; default_roots() when roots is None."""
     conn = _connect()
     state = {r["path"]: r for r in conn.execute("SELECT * FROM harvest_files")}
-    files = glob.glob(str(PROJECTS / "**" / "*.jsonl"), recursive=True)
+    files = []
+    for device, root in (default_roots() if roots is None else roots):
+        files += [(device, f) for f in glob.glob(str(Path(root) / "**" / "*.jsonl"),
+                                                recursive=True)]
     changed = new_turns = appended_bytes = titles = 0
+    newest = {}                             # device -> newest transcript mtime_ns
 
-    for path in files:
+    for device, path in files:
         try:
             st = os.stat(path)
         except FileNotFoundError:
             continue                        # vanished between glob and stat
+        newest[device] = max(newest.get(device, 0), st.st_mtime_ns)
         dev_ino = f"{st.st_dev}:{st.st_ino}"
         prev = state.get(path)
 
@@ -337,7 +381,7 @@ def harvest(verbose: bool = False) -> dict:
         else:
             offset = 0
 
-        turns, latest_title, new_offset = _read_appended(path, offset)
+        turns, latest_title, new_offset = _read_appended(path, offset, device)
         changed += 1
         new_turns += len(turns)
         appended_bytes += new_offset - offset
@@ -366,6 +410,10 @@ def harvest(verbose: bool = False) -> dict:
                 (path, dev_ino, st.st_size, st.st_mtime_ns, new_offset, len(turns), _now()),
             )
 
+    with conn:
+        for device, mtime_ns in newest.items():
+            seen = datetime.fromtimestamp(mtime_ns / 1e9, timezone.utc).isoformat()
+            db.touch_device(conn, device, seen)
     refresh_window_tokens(conn)
     total = conn.execute("SELECT COUNT(*) FROM turns").fetchone()[0]
     # heartbeat + last-run stats for the poller's pipeline health check

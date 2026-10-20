@@ -1,0 +1,8 @@
+[Unit]
+Description=Back up usage.db (SQLite online backup)
+OnFailure=usage-alert@%N.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/michael/dev/claude-usage-tracker/tracker
+ExecStart=/home/michael/work/bin/python /home/michael/dev/claude-usage-tracker/tracker/backup.py
